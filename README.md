@@ -76,7 +76,6 @@ npm run dev:all
 ```
 
 The admin dashboard includes:
-
 - Today, new, completed, and total request summaries
 - A seven-day customer-request graph
 - A recent-requests list with status management
