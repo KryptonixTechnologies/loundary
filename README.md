@@ -33,7 +33,6 @@ The site presents the company’s laundry services, turnaround times, care proce
 The project has been verified with Node.js 24 and npm 11.
 
 ## Getting started
-
 Clone or download the project, then run:
 
 ```bash
