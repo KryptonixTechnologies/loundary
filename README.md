@@ -19,7 +19,6 @@ The site presents the company’s laundry services, turnaround times, care proce
 - Optimized Vite production build
 
 ## Technology
-
 - [React](https://react.dev/)
 - [Vite](https://vite.dev/)
 - [Lucide React](https://lucide.dev/guide/packages/lucide-react) for icons
