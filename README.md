@@ -26,7 +26,6 @@ The site presents the company’s laundry services, turnaround times, care proce
 - Plain CSS with responsive media queries
 
 ## Requirements
-
 - Node.js 20 or newer
 - npm 10 or newer
 
