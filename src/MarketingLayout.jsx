@@ -162,10 +162,10 @@ function Footer() {
         </div>
         <div className="footer-column">
           <h3>Contact</h3>
-          <a href={`tel:${business.phone}`}><Phone size={14} /> {business.phone}</a>
-          <a href={`mailto:${business.email}`}><Mail size={14} /> {business.email}</a>
+          <a href={`tel:${business.phone.replace(/\s/g, '')}`}><Phone size={16} /> {business.phone}</a>
+          <a href={`mailto:${business.email}`}><Mail size={16} /> {business.email}</a>
           <a href={business.whatsapp} target="_blank" rel="noopener noreferrer">WhatsApp</a>
-          <a href="https://www.google.com/maps/search/?api=1&query=Chuna+Mall+Kitengela" target="_blank" rel="noopener noreferrer"><MapPin size={14} /> Chuna Mall, Kitengela</a>
+          <a href="https://www.google.com/maps/search/?api=1&query=Chuna+Mall+Kitengela" target="_blank" rel="noopener noreferrer"><MapPin size={16} /> Chuna Mall, Kitengela</a>
         </div>
       </div>
       <div className="footer-bottom">

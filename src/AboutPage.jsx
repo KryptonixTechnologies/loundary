@@ -57,20 +57,20 @@ export default function AboutPage() {
             <p>
               We offer wash & fold, dry cleaning, ironing & steaming, and pickup & delivery services. Our express wash option returns your laundry in just 4 hours.
             </p>
-            <div className="about-highlights">
-              <div className="about-highlight">
-                <h2>Our Process</h2>
-                <p>Collect → Sort → Clean → Finish → Deliver</p>
-              </div>
-              <div className="about-highlight">
-                <h2>Service Areas</h2>
-                <p>Kitengela, Kisaju, Isinya, Athi River, Mlolongo, Kajiado</p>
-              </div>
-              <div className="about-highlight">
-                <h2>Payment</h2>
-                <p>Cash and M-Pesa accepted</p>
-              </div>
-            </div>
+<div className="about-highlights">
+  <div className="about-highlight">
+    <h3>Our Process</h3>
+    <p>Collect → Sort → Clean → Finish → Deliver</p>
+  </div>
+  <div className="about-highlight">
+    <h3>Service Areas</h3>
+    <p>Kitengela, Kisaju, Isinya, Athi River, Mlolongo, Kajiado</p>
+  </div>
+  <div className="about-highlight">
+    <h3>Payment</h3>
+    <p>Cash and M-Pesa accepted</p>
+  </div>
+</div>
           </div>
           <div className="about-visual">
             <img src="/assets/laundry-machines.jpg" alt="Washing machines at Open Doors Laundromat" loading="lazy" />
