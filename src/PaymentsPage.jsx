@@ -1,167 +1,136 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from './AuthContext.jsx';
+import {
+  ArrowUpRight,
+  Check,
+  ClipboardList,
+  Clock,
+  DollarSign,
+  Edit3,
+  Eye,
+  Package,
+  Search,
+  Trash2,
+  X,
+  CreditCard,
+  Wallet,
+} from 'lucide-react';
 
 export default function PaymentsPage() {
-  const [orders, setOrders] = useState([]);
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [filter, setFilter] = useState('all');
 
   useEffect(() => {
     fetch('/api/admin/dashboard')
-      .then(async (response) => {
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.error || 'Failed to load payments');
-        }
-
-        return data;
-      })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((data) => {
-        setOrders(data.requests || []);
-      })
-      .catch((err) => {
-        setError(err.message);
-      })
-      .finally(() => {
+        const requests = data.requests || [];
+        const paymentData = requests.map((req, i) => ({
+          id: req.id,
+          customer: req.name,
+          phone: req.phone,
+          amount: req.estimatedTotal || 0,
+          method: req.paymentMethod || 'Cash',
+          status: req.paymentStatus || 'pending',
+          orderStatus: req.status || 'new',
+          date: req.createdAt,
+          receiptNumber: req.receiptNumber,
+          receiptToken: req.receiptToken,
+          mpesaPhone: req.mpesaPhone,
+        }));
+        setPayments(paymentData);
         setLoading(false);
-      });
+      })
+      .catch(() => setLoading(false));
   }, []);
 
-  const totals = useMemo(() => {
-    return orders.reduce(
-      (result, order) => {
-        const amount = Number(order.estimatedTotal || 0);
+  const filtered = filter === 'all'
+    ? payments
+    : payments.filter((p) => p.method === filter || p.status === filter);
 
-        result.total += amount;
+  const totalCollected = payments
+    .filter((p) => p.status === 'paid')
+    .reduce((sum, p) => sum + p.amount, 0);
+  const totalPending = payments
+    .filter((p) => p.status === 'pending')
+    .reduce((sum, p) => sum + p.amount, 0);
 
-        if (order.paymentMethod === 'M-Pesa') {
-          result.mpesa += amount;
-        }
-
-        if (order.paymentMethod === 'Cash') {
-          result.cash += amount;
-        }
-
-        if (order.paymentStatus === 'paid') {
-          result.paid += amount;
-        }
-
-        return result;
-      },
-      {
-        total: 0,
-        mpesa: 0,
-        cash: 0,
-        paid: 0,
-      }
-    );
-  }, [orders]);
-
-  if (loading) {
-    return (
-      <main className="page-container">
-        <p>Loading payments...</p>
-      </main>
-    );
-  }
-
-  if (error) {
-    return (
-      <main className="page-container">
-        <h1>Payments</h1>
-        <p>{error}</p>
-      </main>
-    );
-  }
+  if (loading) return <div className="pos-page"><h2>Payments</h2><p>Loading payments…</p></div>;
 
   return (
-    <main className="page-container">
-      <section className="page-header">
-        <h1>Payments</h1>
-        <p>Track customer payments and payment methods.</p>
-      </section>
-
-      <section className="stats-grid">
-        <div className="stat-card">
-          <span>Total Orders Value</span>
-          <strong>
-            KES {totals.total.toLocaleString()}
-          </strong>
+    <div className="pos-page">
+      <header className="pos-page-header">
+        <div>
+          <p className="eyebrow">Payments</p>
+          <h2>Payment reconciliation.</h2>
         </div>
-
-        <div className="stat-card">
-          <span>M-Pesa</span>
-          <strong>
-            KES {totals.mpesa.toLocaleString()}
-          </strong>
+        <div className="payment-summary">
+          <div className="stat-card">
+            <DollarSign size={20} />
+            <div>
+              <small>Total Collected</small>
+              <b>KSh {totalCollected.toLocaleString()}</b>
+            </div>
+          </div>
+          <div className="stat-card">
+            <Clock size={20} />
+            <div>
+              <small>Pending</small>
+              <b>KSh {totalPending.toLocaleString()}</b>
+            </div>
+          </div>
         </div>
-
-        <div className="stat-card">
-          <span>Cash</span>
-          <strong>
-            KES {totals.cash.toLocaleString()}
-          </strong>
-        </div>
-
-        <div className="stat-card">
-          <span>Marked Paid</span>
-          <strong>
-            KES {totals.paid.toLocaleString()}
-          </strong>
-        </div>
-      </section>
-
-      <div className="orders-table-wrapper">
-        <table className="orders-table">
-          <thead>
-            <tr>
-              <th>Receipt</th>
-              <th>Customer</th>
-              <th>Payment Method</th>
-              <th>M-Pesa Phone</th>
-              <th>Amount</th>
-              <th>Payment Status</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {orders.map((order) => (
-              <tr key={order.id}>
-                <td>{order.receiptNumber}</td>
-
-                <td>
-                  <strong>{order.name}</strong>
-                  <br />
-                  <small>{order.phone}</small>
-                </td>
-
-                <td>{order.paymentMethod}</td>
-
-                <td>
-                  {order.mpesaPhone || '-'}
-                </td>
-
-                <td>
-                  KES{' '}
-                  {Number(
-                    order.estimatedTotal || 0
-                  ).toLocaleString()}
-                </td>
-
-                <td>
-                  {order.paymentStatus || 'pending'}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        {orders.length === 0 && (
-          <p className="empty-state">
-            No payments found.
-          </p>
-        )}
+      </header>
+      <div className="pos-filters">
+        {['all', 'M-Pesa', 'Cash'].map((m) => (
+          <button
+            key={m}
+            className={filter === m ? 'active' : ''}
+            onClick={() => setFilter(m)}
+          >
+            {m === 'all' ? 'All' : m}
+          </button>
+        ))}
       </div>
-    </main>
+      {filtered.length === 0 ? (
+        <div className="empty-state">
+          <ClipboardList size={28} />
+          <h3>No payments found</h3>
+          <p>Payment records will appear here.</p>
+        </div>
+      ) : (
+        <div className="payment-list">
+          {filtered.map((payment) => (
+            <article key={payment.id} className="payment-card">
+              <div className="payment-card-header">
+                <div>
+                  <b>{payment.customer}</b>
+                  <span>{payment.phone}</span>
+                </div>
+                <span className={`badge ${payment.status === 'paid' ? 'badge-success' : 'badge-warning'}`}>
+                  {payment.status}
+                </span>
+              </div>
+              <div className="payment-card-body">
+                <span><CreditCard size={14} /> {payment.method}</span>
+                <b>KSh {payment.amount.toLocaleString()}</b>
+                <small>{payment.receiptNumber}</small>
+              </div>
+              <div className="payment-card-actions">
+                {payment.receiptToken && (
+                  <button onClick={() => navigate(`/receipt/${payment.receiptToken}`)}>
+                    <Eye size={16} /> Receipt
+                  </button>
+                )}
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
