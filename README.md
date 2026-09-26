@@ -61,7 +61,6 @@ http://localhost:5173
 | `npm start` | Serve the API and production website together |
 
 ## Admin dashboard
-
 The protected admin dashboard is available at:
 
 ```text
