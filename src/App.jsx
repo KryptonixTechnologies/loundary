@@ -1,31 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+import { Routes, Route, useLocation } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
-import {
-  Menu,
-  X,
-  ArrowUpRight,
-  Truck,
-  Sparkles,
-  Clock3,
-  Shirt,
-  MapPin,
-  Phone,
-  Mail,
-  Check,
-  ChevronDown,
-  ShieldCheck,
-  PackageCheck,
-  Leaf,
-  Sun,
-  Moon,
-  WifiOff,
-  RefreshCw,
-  LogIn,
-  Database,
-  Wifi,
-} from 'lucide-react';
-import { AuthProvider, useAuth } from './AuthContext.jsx';
+import { AuthProvider } from './AuthContext.jsx';
 import ProtectedRoute from './ProtectedRoute.jsx';
 import LoginPage from './LoginPage.jsx';
 import MarketingLayout from './MarketingLayout.jsx';
@@ -41,42 +17,15 @@ import PaymentsPage from './PaymentsPage.jsx';
 import ReportsPage from './ReportsPage.jsx';
 import SettingsPage from './SettingsPage.jsx';
 import OfflinePOSPage from './OfflinePOSPage.jsx';
+import POSSalePage from './POSSalePage.jsx';
 import HomePage from './HomePage.jsx';
 import ServicesPage from './ServicesPage.jsx';
 import ProcessPage from './ProcessPage.jsx';
 import AboutPage from './AboutPage.jsx';
 import ContactPage from './ContactPage.jsx';
-import { useOffline } from './hooks/useOffline.js';
 import './styles.css';
 
-const services = [
-  {
-    icon: Sparkles,
-    n: 'Wash & fold',
-    d: 'Everyday laundry, expertly sorted, washed, dried and neatly folded.',
-    p: 'From KSh 1,200 / load',
-  },
-  {
-    icon: Shirt,
-    n: 'Dry cleaning',
-    d: 'Careful treatment for suits, dresses, delicate fabrics and special garments.',
-    p: 'Priced per item',
-  },
-  {
-    icon: Clock3,
-    n: 'Ironing & steaming',
-    d: 'Crisp, polished finishing for your wardrobe, uniforms and linens.',
-    p: 'From KSh 700 / load',
-  },
-  {
-    icon: Truck,
-    n: 'Pickup & delivery',
-    d: 'Door-to-door convenience across Kitengela, Kisaju, Isinya and Athi River.',
-    p: 'Available daily',
-  },
-];
-
-const defaultSteps = ['We collect', 'We sort', 'We clean', 'We finish', 'We deliver'];
+const SITE_URL = 'https://open-doors-laundory.vercel.app';
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -86,304 +35,10 @@ function ScrollToTop() {
   return null;
 }
 
-function MobileDrawer() {
-  const [open, setOpen] = useState(false);
-  const navigate = useNavigate();
-  const location = useLocation();
-  const { user } = useAuth();
-
-  useEffect(() => {
-    setOpen(false);
-  }, [location]);
-
-  const navItems = [
-    { path: '/', label: 'Home' },
-    { path: '/services', label: 'Services' },
-    { path: '/process', label: 'Process' },
-    { path: '/pricing', label: 'Pricing' },
-    { path: '/about', label: 'About' },
-    { path: '/contact', label: 'Contact' },
-  ];
-
-  return (
-    <>
-      <button
-        className="menu-btn"
-        onClick={() => setOpen(!open)}
-        aria-label="Toggle navigation menu"
-      >
-        {open ? <X size={20} /> : <Menu size={20} />}
-      </button>
-      {open && (
-        <>
-          <div
-            className="nav-drawer-overlay"
-            onClick={() => setOpen(false)}
-          />
-          <nav className={`nav-drawer ${open ? 'open' : ''}`}>
-            <button className="drawer-close" onClick={() => setOpen(false)} aria-label="Close menu">
-              <X size={18} />
-            </button>
-            {navItems.map(({ path, label }) => (
-              <a
-                key={path}
-                href={path}
-                onClick={(e) => {
-                  e.preventDefault();
-                  navigate(path);
-                  setOpen(false);
-                }}
-                className={location.pathname === path ? 'active' : ''}
-              >
-                {label}
-              </a>
-            ))}
-            {user ? (
-              <a
-                href="/dashboard"
-                onClick={(e) => {
-                  e.preventDefault();
-                  navigate('/dashboard');
-                  setOpen(false);
-                }}
-                className={location.pathname === '/dashboard' ? 'active' : ''}
-              >
-                Dashboard
-              </a>
-            ) : (
-              <>
-                <a
-                   href="/login"
-                   onClick={(e) => {
-                     e.preventDefault();
-                     navigate('/login');
-                     setOpen(false);
-                   }}
-                   className={location.pathname === '/login' ? 'active' : ''}
-                 >
-                   <LogIn size={16} /> Sign in
-                 </a>
-                <a
-                  href="/booking"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    navigate('/booking');
-                    setOpen(false);
-                  }}
-                  className={location.pathname === '/booking' ? 'active' : ''}
-                >
-                  Get Started
-                </a>
-              </>
-            )}
-          </nav>
-        </>
-      )}
-    </>
-  );
-}
-
-function Header() {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const { user } = useAuth();
-  const [theme, setTheme] = useState(() => {
-    return localStorage.getItem('od-theme') ||
-      (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-  });
-  const [connectivity, setConnectivity] = useState(navigator.onLine ? 'online' : 'offline');
-  const [syncing, setSyncing] = useState(false);
-  const { pendingCount } = useOffline();
-
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('od-theme', theme);
-  }, [theme]);
-
-  useEffect(() => {
-    const handleOnline = () => {
-      setConnectivity('online');
-      setSyncing(true);
-      setTimeout(() => setSyncing(false), 2000);
-    };
-    const handleOffline = () => setConnectivity('offline');
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
-
-  const toggleTheme = () => {
-    setTheme((t) => (t === 'light' ? 'dark' : 'light'));
-  };
-
-  const navItems = [
-    { path: '/', label: 'Home' },
-    { path: '/services', label: 'Services' },
-    { path: '/process', label: 'Process' },
-    { path: '/pricing', label: 'Pricing' },
-    { path: '/about', label: 'About' },
-    { path: '/contact', label: 'Contact' },
-  ];
-
-  return (
-    <>
-      <a href="#main-content" className="skip-link">
-        Skip to main content
-      </a>
-      <div className="topbar">
-        <span>Express wash in just 4 hours</span>
-        <span>Chuna Mall · Shop 10 · Kitengela</span>
-      </div>
-      <header>
-        <a className="brand" href="/">
-          <span className="logo-crop">
-            <img src="/assets/logo.jpg" alt="Open Doors POS logo" width="54" height="54" />
-          </span>
-          <span>
-            OPEN DOORS<small>POS</small>
-          </span>
-        </a>
-        <nav className={connectivity !== 'online' ? '' : ''}>
-          {navItems.map(({ path, label }) => (
-            <a
-              key={path}
-              href={path}
-              onClick={(e) => {
-                e.preventDefault();
-                navigate(path);
-              }}
-              className={location.pathname === path ? 'active' : ''}
-            >
-              {label}
-            </a>
-          ))}
-          {user ? (
-            <>
-              <a
-                className="nav-cta"
-                href="/dashboard"
-                onClick={(e) => {
-                  e.preventDefault();
-                  navigate('/dashboard');
-                }}
-              >
-                Dashboard
-              </a>
-              <a
-                className="nav-cta"
-                href="/offline-pos"
-                onClick={(e) => {
-                  e.preventDefault();
-                  navigate('/offline-pos');
-                }}
-              >
-                <Database size={16} /> Offline
-              </a>
-            </>
-          ) : (
-            <>
-              <a
-                className="nav-cta"
-                href="/login"
-                onClick={(e) => {
-                  e.preventDefault();
-                  navigate('/login');
-                }}
-              >
-                <LogIn size={16} /> Sign in
-              </a>
-              <a
-                className="nav-cta nav-cta-secondary"
-                href="/booking"
-                onClick={(e) => {
-                  e.preventDefault();
-                  navigate('/booking');
-                }}
-              >
-                Get Started
-              </a>
-            </>
-          )}
-        </nav>
-        <button className="theme-toggle" onClick={toggleTheme} aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}>
-          {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
-        </button>
-        <MobileDrawer />
-      </header>
-      {connectivity !== 'online' && (
-        <div className={`connectivity-indicator ${connectivity}`}>
-          {connectivity === 'offline' ? <WifiOff size={14} /> : <RefreshCw size={14} />}
-          {' '}{syncing ? 'Syncing...' : connectivity === 'offline' ? 'Offline' : 'Back online'}
-          {pendingCount > 0 && connectivity === 'online' && (
-            <span> · {pendingCount} pending</span>
-          )}
-        </div>
-      )}
-      {syncing && (
-        <div className="connectivity-indicator syncing" style={{ bottom: '60px' }}>
-          <RefreshCw size={14} /> Syncing...
-        </div>
-      )}
-    </>
-  );
-}
-
-function Footer() {
-  return (
-    <footer>
-      <div className="footer-main">
-        <div className="footer-intro">
-          <div className="brand footer-brand">
-            <span className="logo-crop">
-              <img src="/assets/logo.jpg" alt="Open Doors POS logo" width="42" height="42" />
-            </span>
-            <span>
-              OPEN DOORS<small>POS</small>
-            </span>
-          </div>
-          <p>
-            Simple, powerful point-of-sale software designed for laundromats.
-          </p>
-          <a className="footer-cta" href="https://wa.me/254119444972" target="_blank" rel="noopener noreferrer">
-            Book a pickup <ArrowUpRight size={18} />
-          </a>
-        </div>
-        <div className="footer-column">
-          <h3>Product</h3>
-          <a href="/">Home</a>
-          <a href="/services">Services</a>
-          <a href="/pricing">Pricing</a>
-          <a href="/login">Login</a>
-        </div>
-        <div className="footer-column">
-          <h3>Resources</h3>
-          <a href="/process">How It Works</a>
-          <a href="/faq">FAQ</a>
-          <a href="/contact">Contact</a>
-        </div>
-        <div className="footer-column">
-          <h3>Contact</h3>
-          <a href="tel:+254119444972">011 944 4972</a>
-          <a href="mailto:opendoorslaundromat@gmail.com">Email us</a>
-          <a href="https://wa.me/254119444972" target="_blank" rel="noopener noreferrer">WhatsApp</a>
-        </div>
-      </div>
-      <div className="footer-bottom">
-        <p>© 2026 Open Doors POS</p>
-        <p className="footer-tagline">So fresh, so clean, so you.</p>
-        <a href="#">Back to top ↑</a>
-      </div>
-    </footer>
-  );
-}
 
 // Page wrappers (inline for POS-specific pages)
 function PricingPage() {
   const [siteSettings, setSiteSettings] = useState(null);
-  const [prices, setPrices] = useState(false);
 
   const priceGroups = [
     {
@@ -425,11 +80,16 @@ function PricingPage() {
         <title>Pricing | Open Doors Laundromat</title>
         <meta name="description" content="Clear, honest pricing for all laundry services. Know before you load." />
         <meta name="robots" content="index, follow" />
-        <link rel="canonical" href="/pricing" />
+        <link rel="canonical" href={`${SITE_URL}/pricing`} />
         <meta property="og:title" content="Pricing | Open Doors Laundromat" />
         <meta property="og:description" content="Clear, honest pricing for all laundry services." />
         <meta property="og:type" content="website" />
-        <meta property="og:url" content="https://open-doors-laundory.vercel.app/pricing" />
+        <meta property="og:url" content={`${SITE_URL}/pricing`} />
+        <meta property="og:image" content={`${SITE_URL}/assets/pricing-guide-full.jpg`} />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Pricing | Open Doors Laundromat" />
+        <meta name="twitter:description" content="Clear, honest pricing for all laundry services." />
+        <meta name="twitter:image" content={`${SITE_URL}/assets/pricing-guide-full.jpg`} />
       </Helmet>
 
       <section className="section pricing" id="pricing">
@@ -439,7 +99,7 @@ function PricingPage() {
             <h2>Know before you load.</h2>
           </div>
           <p>
-            Prices in Kenyan shillings. Children's single items are charged at half the adult rate.
+            Prices in Kenyan shillings. Final charges are confirmed after garment inspection.
           </p>
         </div>
         <div className="price-grid">
@@ -455,25 +115,12 @@ function PricingPage() {
             </article>
           ))}
         </div>
-        <button className="all-prices" onClick={() => setPrices(!prices)}>
-          More item prices <ChevronDown size={16} className={prices ? 'flipped' : ''} />
-        </button>
-        {prices && (
-          <div className="more-prices">
-            <span>Wedding gown <b>KSh 1,500–3,000</b></span>
-            <span>Leather jacket <b>KSh 1,500</b></span>
-            <span>School blazer <b>KSh 300</b></span>
-            <span>Three-piece suit <b>KSh 800</b></span>
-            <span>Blanket 4kg <b>KSh 1,000</b></span>
-            <span>Sheers per kg <b>KSh 200</b></span>
-          </div>
-        )}
         <figure className="pricing-guide">
-          <img src="/assets/pricing-guide-full.jpg" alt="Complete pricing guide" width="900" height="auto" loading="lazy" />
+          <img src="/assets/pricing-guide-full.jpg" alt="Complete Open Doors Laundromat pricing guide" width="900" height="auto" loading="lazy" />
           <figcaption>Full pricing guide — tap or click to view clearly</figcaption>
         </figure>
         <p className="note">
-          A 7kg load is approximately 25 shirts or 14 trousers. Single-unit children's clothing is half price.
+          Pay by Cash or M-Pesa. A printed or PDF receipt is issued for every order.
         </p>
       </section>
     </>
@@ -487,11 +134,16 @@ function BookingPageWrapper() {
         <title>Book a Pickup | Open Doors Laundromat</title>
         <meta name="description" content="Schedule your laundry pickup with Open Doors Laundromat." />
         <meta name="robots" content="index, follow" />
-        <link rel="canonical" href="/booking" />
+        <link rel="canonical" href={`${SITE_URL}/booking`} />
         <meta property="og:title" content="Book a Pickup | Open Doors Laundromat" />
         <meta property="og:description" content="Schedule your laundry pickup." />
         <meta property="og:type" content="website" />
-        <meta property="og:url" content="https://open-doors-laundory.vercel.app/booking" />
+        <meta property="og:url" content={`${SITE_URL}/booking`} />
+        <meta property="og:image" content={`${SITE_URL}/assets/laundry-machines.jpg`} />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Book a Pickup | Open Doors Laundromat" />
+        <meta name="twitter:description" content="Schedule your laundry pickup." />
+        <meta name="twitter:image" content={`${SITE_URL}/assets/laundry-machines.jpg`} />
       </Helmet>
       <BookingForm />
     </>
@@ -572,6 +224,11 @@ export default function App() {
         <Route path="/orders" element={
           <ProtectedRoute>
             <POSLayout><OrdersPage /></POSLayout>
+          </ProtectedRoute>
+        } />
+        <Route path="/new-order" element={
+          <ProtectedRoute>
+            <POSLayout><POSSalePage /></POSLayout>
           </ProtectedRoute>
         } />
         <Route path="/customers" element={

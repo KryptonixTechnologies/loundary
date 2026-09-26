@@ -1,9 +1,12 @@
 import React from 'react';
-import { Helmet } from 'react-helmet-async';
-import { ArrowUpRight, Menu, X, Sun, Moon, LogIn, Phone, MapPin, Clock, Check, Star, Zap, Shield, Truck, RefreshCw, Search } from 'lucide-react';
+import { ArrowUpRight, Menu, X, Sun, Moon, LogIn, Phone, MapPin, Mail } from 'lucide-react';
 import { useAuth } from './AuthContext.jsx';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import './MarketingLayout.css';
+
+// Production site URL as configured in sitemap.xml / vercel deployment.
+// Used for absolute canonical + Open Graph URLs.
+const SITE_URL = 'https://open-doors-laundory.vercel.app';
 
 const business = {
   name: 'Open Doors Laundromat',
@@ -118,7 +121,7 @@ export function MarketingLayout({ children }) {
           {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
         </button>
       </header>
-      <main id="main-content">{children}</main>
+      <main id="main-content">{children ?? <Outlet />}</main>
       <Footer />
     </>
   );
@@ -168,13 +171,13 @@ function Footer() {
       <div className="footer-bottom">
         <p>© 2026 Open Doors Laundromat</p>
         <p className="footer-tagline">So fresh, so clean, so you.</p>
-        <a href="#">Back to top ↑</a>
+        <button type="button" className="footer-top" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
+          Back to top ↑
+        </button>
       </div>
     </footer>
   );
 }
 
-function Mail(props) { return <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>; }
-
-export { business, services, processSteps, faqs };
+export { business, services, processSteps, faqs, SITE_URL };
 export default MarketingLayout;
