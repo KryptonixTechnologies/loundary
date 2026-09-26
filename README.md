@@ -5,7 +5,6 @@ A responsive, production-ready marketing website for **Open Doors Laundromat**, 
 The site presents the company’s laundry services, turnaround times, care process, pricing, location, opening hours, and contact channels. Its content and business details were adapted from the supplied Open Doors corporate brochure.
 
 ## Features
-
 - Responsive single-page layout for mobile, tablet, and desktop
 - Sticky navigation with a mobile menu
 - Service overview for washing, folding, dry cleaning, ironing, and delivery
