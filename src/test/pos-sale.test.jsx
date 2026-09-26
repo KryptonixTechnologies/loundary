@@ -170,7 +170,7 @@ describe('POS vs marketing routing separation', () => {
       expect(screen.getByRole('navigation', { name: 'POS' })).toBeInTheDocument();
     });
     const posNav = screen.getByRole('navigation', { name: 'POS' });
-    expect(within(posNav).getByRole('link', { name: /new sale/i }).getAttribute('href')).toBe('/new-order');
+    expect(within(posNav).getByRole('link', { name: /new booking/i }).getAttribute('href')).toBe('/new-order');
     expect(within(posNav).queryByRole('link', { name: /^services$/i })).not.toBeInTheDocument();
   });
 

@@ -4,8 +4,14 @@ import argon2 from 'argon2';
 export const adminUserRepository = {
   // Find admin user by email
   async findByEmail(email) {
-    return prisma.adminUser.findUnique({
-      where: { email: email.toLowerCase() },
+    return prisma.adminUser.findFirst({
+      where: {
+        OR: [
+          { email: email.toLowerCase() },
+          { username: email.toLowerCase() },
+        ],
+        active: true,
+      },
     });
   },
 
@@ -22,7 +28,7 @@ export const adminUserRepository = {
     if (!user) return null;
     
     const isValid = await argon2.verify(user.passwordHash, password);
-    return isValid ? user : null;
+    return isValid && user.active ? user : null;
   },
 
   // Create admin user (for seeding)

@@ -103,10 +103,8 @@ describe('cashier workflow offline (real component, real Dexie)', () => {
     await user.click(within(dryingRow).getByRole('button', { name: /remove/i }));
     await waitFor(() => expect(screen.getByText('KSh 1,200', { selector: '.grand-total span:last-child' })).toBeInTheDocument());
 
-    // Existing cached customer via suggestion.
-    await user.type(screen.getByLabelText('Customer name'), 'Sam');
-    await waitFor(() => expect(screen.getByRole('option', { name: /server sam/i })).toBeInTheDocument());
-    await user.click(screen.getByRole('option', { name: /server sam/i }));
+    // Bookings can only use an existing registered customer.
+    await user.selectOptions(screen.getByLabelText(/registered customer/i), screen.getByRole('option', { name: /server sam/i }));
 
     await user.click(screen.getByRole('button', { name: /complete sale/i }));
 
@@ -135,8 +133,7 @@ describe('cashier workflow offline (real component, real Dexie)', () => {
     await waitFor(() => expect(screen.getByText('Washing')).toBeInTheDocument());
     const washingCard = screen.getByText('Washing').closest('article');
     await user.click(within(washingCard).getByRole('button', { name: /^add$/i }));
-    await user.type(screen.getByLabelText('Customer name'), 'Refresh Rose');
-    await user.type(screen.getByLabelText('Customer phone'), '0733333333');
+    await user.selectOptions(screen.getByLabelText(/registered customer/i), screen.getByRole('option', { name: /server sam/i }));
     await user.click(screen.getByRole('button', { name: /complete sale/i }));
     await waitFor(() => expect(screen.getByText(/sale complete/i)).toBeInTheDocument());
 
@@ -145,10 +142,10 @@ describe('cashier workflow offline (real component, real Dexie)', () => {
     cleanup();
     const orders = await db.orders.toArray();
     expect(orders).toHaveLength(1);
-    expect(orders[0].customerName).toBe('Refresh Rose');
+    expect(orders[0].customerName).toBe('Server Sam');
     const pending = await db.outbox.where('status').equals('pending').toArray();
-    // order + payment + new-customer creates queued.
-    expect(pending.length).toBeGreaterThanOrEqual(3);
+    // The registered customer already exists; only order + payment are queued.
+    expect(pending.length).toBeGreaterThanOrEqual(2);
 
     // "Reopen": fresh component sees catalog + customers again.
     renderSale();
@@ -163,13 +160,10 @@ describe('cashier workflow offline (real component, real Dexie)', () => {
     renderSale();
     await waitFor(() => expect(screen.getByText('Washing')).toBeInTheDocument());
 
-    async function completeQuickSale(name, phone) {
+    async function completeQuickSale() {
       const card = screen.getByText('Washing').closest('article');
       await user.click(within(card).getByRole('button', { name: /^add$/i }));
-      await user.clear(screen.getByLabelText('Customer name'));
-      await user.type(screen.getByLabelText('Customer name'), name);
-      await user.clear(screen.getByLabelText('Customer phone'));
-      await user.type(screen.getByLabelText('Customer phone'), phone);
+      await user.selectOptions(screen.getByLabelText(/registered customer/i), screen.getByRole('option', { name: /server sam/i }));
       await user.click(screen.getByRole('button', { name: /complete sale/i }));
       await waitFor(() => expect(screen.getByText(/sale complete/i)).toBeInTheDocument());
       await user.click(screen.getByRole('button', { name: /start new sale/i }));
@@ -224,8 +218,7 @@ describe('cashier workflow offline (real component, real Dexie)', () => {
     await waitFor(() => expect(screen.getByText('Washing')).toBeInTheDocument());
     const card = screen.getByText('Washing').closest('article');
     await user.click(within(card).getByRole('button', { name: /^add$/i }));
-    await user.type(screen.getByLabelText('Customer name'), 'Partial Pam');
-    await user.type(screen.getByLabelText('Customer phone'), '0777777777');
+    await user.selectOptions(screen.getByLabelText(/registered customer/i), screen.getByRole('option', { name: /server sam/i }));
     await user.click(screen.getByRole('button', { name: /complete sale/i }));
     await waitFor(() => expect(screen.getByText(/sale complete/i)).toBeInTheDocument());
 
@@ -258,8 +251,7 @@ describe('restart durability (fresh database handle, same device)', () => {
     await waitFor(() => expect(screen.getByText('Washing')).toBeInTheDocument());
     const card = screen.getByText('Washing').closest('article');
     await user.click(within(card).getByRole('button', { name: /^add$/i }));
-    await user.type(screen.getByLabelText('Customer name'), 'Restart Rita');
-    await user.type(screen.getByLabelText('Customer phone'), '0788888888');
+    await user.selectOptions(screen.getByLabelText(/registered customer/i), screen.getByRole('option', { name: /server sam/i }));
     await user.click(screen.getByRole('button', { name: /complete sale/i }));
     await waitFor(() => expect(screen.getByText(/sale complete/i)).toBeInTheDocument());
     cleanup();
@@ -272,7 +264,7 @@ describe('restart durability (fresh database handle, same device)', () => {
     try {
       expect(await fresh.orders.count()).toBe(1);
       const order = (await fresh.orders.toArray())[0];
-      expect(order).toMatchObject({ customerName: 'Restart Rita', totalAmount: 600 });
+      expect(order).toMatchObject({ customerName: 'Server Sam', totalAmount: 600 });
       expect(order.receiptNumber).toMatch(/^OD-/);
       expect(order.items).toHaveLength(1);
       // Receipt persisted for later re-access (F3).

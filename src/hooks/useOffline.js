@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { enqueueSync, processOutbox, setupConnectivityListeners, checkBackendReachable } from '../lib/offline.js';
 import { generateReceiptPDF } from '../lib/receipt.js';
 import { syncCatalogToLocal, syncCustomersToLocal, getLocalCatalog, getCatalogSyncedAt } from '../lib/catalog.js';
-import { db, getAllOrders, getAllCustomers, getAllPayments, getPendingOutboxItems, addLocalOrder, addLocalCustomer, addLocalPayment, getOrderById, updateLocalOrder, getCustomerById, getOrdersByCustomer, getOrdersByStatus, getCustomersCount, getOrdersCount, getPaymentsCount, saveReceiptToLocal, getReceiptByOrderId, getPendingReceipts, markReceiptSynced, addSyncLogEntry } from '../lib/db.js';
+import { db, getAllOrders, getAllCustomers, getAllPayments, getPendingOutboxItems, addLocalOrder, addLocalCustomer, removeLocalCustomer, addLocalPayment, getOrderById, updateLocalOrder, getCustomerById, getOrdersByCustomer, getOrdersByStatus, getCustomersCount, getOrdersCount, getPaymentsCount, saveReceiptToLocal, getReceiptByOrderId, getPendingReceipts, markReceiptSynced, addSyncLogEntry } from '../lib/db.js';
 
 export function useOffline() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -103,6 +103,11 @@ export function useOffline() {
     return id;
   }, []);
 
+  const deleteCustomerOffline = useCallback(async (customer) => {
+    await removeLocalCustomer(customer);
+    return true;
+  }, []);
+
   const createPaymentOffline = useCallback(async (payment) => {
     const clientId = `client_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
     const id = await addLocalPayment({ ...payment, clientId });
@@ -146,6 +151,7 @@ export function useOffline() {
     refreshCatalog,
     createOrderOffline,
     createCustomerOffline,
+    deleteCustomerOffline,
     createPaymentOffline,
     updateOrderStatusOffline,
     generateOfflineReceipt,

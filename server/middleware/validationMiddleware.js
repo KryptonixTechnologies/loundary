@@ -104,12 +104,7 @@ export function validateAdminLogin(req, res, next) {
       return res.status(400).json({ error: 'Password is required.' });
     }
 
-    // Validate email format
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return res.status(400).json({ error: 'Invalid email format.' });
-    }
-
-    // Limit email and password length
+    // The login field accepts either the account email or username.
     if (email.length > 254) {
       return res.status(400).json({ error: 'Email is too long.' });
     }
@@ -215,10 +210,10 @@ export function validatePricingUpdate(req, res, next) {
 export function validateStatusUpdate(req, res, next) {
   try {
     const { status } = req.body || {};
-    const allowedStatuses = ['new', 'confirmed', 'completed', 'cancelled'];
+    const allowedStatuses = ['new', 'confirmed', 'booked', 'awaiting_processing', 'washing', 'drying', 'ironing', 'ready_for_collection', 'cancelled'];
 
     if (!status || !allowedStatuses.includes(status)) {
-      return res.status(400).json({ error: 'Invalid status. Must be one of: new, confirmed, completed, cancelled.' });
+      return res.status(400).json({ error: 'Invalid service status.' });
     }
 
     req.validatedStatus = status;

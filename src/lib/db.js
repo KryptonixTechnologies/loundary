@@ -13,7 +13,7 @@ export class OpenDoorsDB extends Dexie {
   constructor() {
     super('OpenDoorsPOS');
     this.version(2).stores({
-      customers: '++id, externalId, clientId, name, phone, email, address, notes, createdAt, updatedAt, syncStatus, lastSyncedAt',
+      customers: '++id, externalId, clientId, name, phone, email, gender, address, notes, createdAt, updatedAt, syncStatus, lastSyncedAt',
       orders: '++id, externalId, clientId, customerId, service, status, totalAmount, paidAmount, createdAt, updatedAt, syncStatus, lastSyncedAt, receiptNumber, receiptToken',
       payments: '++id, externalId, clientId, orderId, amount, method, reference, createdAt, updatedAt, syncStatus, lastSyncedAt',
       products: '++id, externalId, name, price, category, unit, createdAt, updatedAt, syncStatus, lastSyncedAt',
@@ -21,6 +21,9 @@ export class OpenDoorsDB extends Dexie {
       syncLog: '++id, entityType, entityId, action, status, timestamp, details',
       settings: 'key, value, updatedAt',
       receipts: '++id, orderId, receiptNumber, receiptToken, pdfData, createdAt, syncedAt',
+    });
+    this.version(3).stores({
+      customers: '++id, externalId, clientId, name, phone, email, gender, address, notes, createdAt, updatedAt, syncStatus, lastSyncedAt',
     });
   }
 }
@@ -131,6 +134,34 @@ export async function addLocalCustomer(customer) {
     lastSyncedAt: null,
   });
   return id;
+}
+
+export async function removeLocalCustomer(customer) {
+  return db.transaction('rw', db.customers, db.orders, db.outbox, async () => {
+    const linkedOrders = await db.orders.filter((order) =>
+      String(order.customerId || '') === String(customer.externalId || customer.id)
+    ).count();
+    if (linkedOrders > 0) throw new Error('Customers linked to bookings cannot be deleted.');
+
+    if (customer.syncStatus === 'pending') {
+      await db.outbox.where('entityId').equals(customer.clientId).delete();
+    } else {
+      await db.outbox.add({
+        entityType: 'customer',
+        entityId: customer.clientId,
+        clientId: customer.clientId,
+        action: 'delete',
+        payload: JSON.stringify({ serverId: customer.externalId }),
+        idempotencyKey: `customer_${customer.clientId}_delete_${Date.now()}`,
+        status: 'pending',
+        retryCount: 0,
+        createdAt: new Date().toISOString(),
+        syncedAt: null,
+        error: null,
+      });
+    }
+    await db.customers.delete(customer.id);
+  });
 }
 
 export async function addLocalOrder(order) {
@@ -390,7 +421,8 @@ export async function upsertServerCustomers(serverRequests) {
       externalId: req.id || null,
       name: req.name || 'Walk-in',
       phone: req.phone,
-      email: '',
+      email: req.email || '',
+      gender: req.gender || '',
       address: req.location || '',
       syncStatus: 'synced',
       createdAt: req.createdAt || now,

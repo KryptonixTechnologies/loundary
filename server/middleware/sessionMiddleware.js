@@ -115,6 +115,15 @@ export function requireAdmin(req, res, next) {
   }
 }
 
+export function requireAdministrator(req, res, next) {
+  return requireAdmin(req, res, () => {
+    if (req.adminUser.role !== 'admin') {
+      return res.status(403).json({ error: 'Administrator access is required.' });
+    }
+    next();
+  });
+}
+
 // Middleware to get optional session (for /api/admin/session)
 export function getOptionalSession(req, res, next) {
   try {

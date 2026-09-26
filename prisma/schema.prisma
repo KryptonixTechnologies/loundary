@@ -14,13 +14,23 @@ datasource db {
 // ADMIN USERS
 // ============================================
 model AdminUser {
-  id           String    @id @default(cuid())
-  email        String    @unique
+  id           String   @id @default(cuid())
+  email        String   @unique
+  username     String?  @unique
+  name         String?
+  role         String   @default("admin")
+  active       Boolean  @default(true)
   passwordHash String
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  // Only one admin user for this simple application
+  bookingsCreated BookingRequest[]       @relation("BookingCreatedBy")
+  statusChanges   BookingStatusHistory[]
+  payments        Payment[]
+  notifications   Notification[]
+  closedBookings  BookingRequest[]       @relation("BookingClosedBy")
+  auditLogs       AuditLog[]
+
   @@map("admin_users")
 }
 
@@ -28,16 +38,16 @@ model AdminUser {
 // SITE SETTINGS
 // ============================================
 model SiteSettings {
-  id              String   @id @default(cuid())
-  seoTitle        String
-  seoDescription  String
-  businessName    String   @default("Open Doors Laundromat")
-  phone           String
-  email           String
-  address         String
-  businessHours   String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String   @id @default(cuid())
+  seoTitle       String
+  seoDescription String
+  businessName   String   @default("Open Doors Laundromat")
+  phone          String
+  email          String
+  address        String
+  businessHours  String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   @@unique([id])
   @@map("site_settings")
@@ -78,15 +88,15 @@ model PricingGroup {
 // PRICING ITEMS
 // ============================================
 model PricingItem {
-  id            String     @id @default(cuid())
-  groupId       String
-  group         PricingGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  serviceName   String
-  price         String     // Stored as formatted string e.g., "1,200"
-  unitPrice     Int        // Numeric value for calculations
-  sortOrder     Int        @default(0)
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
+  id          String       @id @default(cuid())
+  groupId     String
+  group       PricingGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  serviceName String
+  price       String // Stored as formatted string e.g., "1,200"
+  unitPrice   Int // Numeric value for calculations
+  sortOrder   Int          @default(0)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 
   @@unique([id])
   @@index([groupId])
@@ -97,45 +107,167 @@ model PricingItem {
 // BOOKING REQUESTS
 // ============================================
 model BookingRequest {
-  id              String          @id @default(cuid())
-  receiptNumber   String          @unique
-  receiptToken    String          @unique
-  name            String
-  phone           String
-  location        String
-  service         String?
-  paymentMethod   String          // "M-Pesa" or "Cash"
-  mpesaPhone      String?
-  notes           String?
-  estimatedTotal  Int
-  paymentStatus   String          @default("pending")
-  status          String          @default("new")
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  id             String    @id @default(cuid())
+  receiptNumber  String    @unique
+  receiptToken   String    @unique
+  name           String
+  phone          String
+  location       String
+  service        String?
+  paymentMethod  String // "M-Pesa" or "Cash"
+  mpesaPhone     String?
+  notes          String?
+  estimatedTotal Int
+  paymentStatus  String    @default("pending")
+  status         String    @default("new")
+  customerId     String?
+  createdById    String?
+  closedById     String?
+  closedAt       DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  items BookingItem[]
+  items         BookingItem[]
+  customer      Customer?              @relation(fields: [customerId], references: [id])
+  createdBy     AdminUser?             @relation("BookingCreatedBy", fields: [createdById], references: [id])
+  closedBy      AdminUser?             @relation("BookingClosedBy", fields: [closedById], references: [id])
+  statusHistory BookingStatusHistory[]
+  payments      Payment[]
+  notifications Notification[]
+  receipt       Receipt?
 
   @@index([receiptToken])
   @@index([receiptNumber])
   @@index([createdAt])
   @@index([status])
+  @@index([customerId])
+  @@index([createdById])
   @@map("booking_requests")
+}
+
+model Customer {
+  id           String           @id @default(cuid())
+  customerCode String           @unique
+  name         String
+  phone        String
+  email        String?
+  gender       String?
+  address      String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  bookings     BookingRequest[]
+
+  @@index([name])
+  @@index([phone])
+  @@map("customers")
+}
+
+model BookingStatusHistory {
+  id          String         @id @default(cuid())
+  bookingId   String
+  status      String
+  note        String?
+  changedById String?
+  changedAt   DateTime       @default(now())
+  booking     BookingRequest @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  changedBy   AdminUser?     @relation(fields: [changedById], references: [id])
+
+  @@index([bookingId, changedAt])
+  @@map("booking_status_history")
+}
+
+model Payment {
+  id             String         @id @default(cuid())
+  bookingId      String
+  amount         Int
+  method         String
+  amountReceived Int?
+  changeGiven    Int?
+  mpesaReference String?        @unique
+  receivedById   String?
+  idempotencyKey String?        @unique
+  createdAt      DateTime       @default(now())
+  booking        BookingRequest @relation(fields: [bookingId], references: [id])
+  receivedBy     AdminUser?     @relation(fields: [receivedById], references: [id])
+  receipt        Receipt?
+
+  @@index([bookingId])
+  @@index([createdAt])
+  @@map("payments")
+}
+
+model Receipt {
+  id            String         @id @default(cuid())
+  receiptNumber String         @unique
+  bookingId     String         @unique
+  paymentId     String         @unique
+  issuedAt      DateTime       @default(now())
+  booking       BookingRequest @relation(fields: [bookingId], references: [id])
+  payment       Payment        @relation(fields: [paymentId], references: [id])
+
+  @@map("receipts")
+}
+
+model Notification {
+  id            String         @id @default(cuid())
+  bookingId     String
+  customerId    String?
+  phone         String
+  channel       String
+  message       String
+  status        String         @default("queued")
+  initiatedById String?
+  sentAt        DateTime?
+  createdAt     DateTime       @default(now())
+  booking       BookingRequest @relation(fields: [bookingId], references: [id])
+  initiatedBy   AdminUser?     @relation(fields: [initiatedById], references: [id])
+
+  @@index([bookingId])
+  @@index([status])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id        String     @id @default(cuid())
+  userId    String?
+  action    String
+  entity    String
+  entityId  String?
+  details   String?
+  createdAt DateTime   @default(now())
+  user      AdminUser? @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([entity, entityId])
+  @@map("audit_logs")
+}
+
+model SyncOperation {
+  id             String   @id @default(cuid())
+  idempotencyKey String   @unique
+  entityType     String
+  clientEntityId String?
+  externalId     String
+  createdAt      DateTime @default(now())
+
+  @@index([entityType, clientEntityId])
+  @@map("sync_operations")
 }
 
 // ============================================
 // BOOKING ITEMS
 // ============================================
 model BookingItem {
-  id             String         @id @default(cuid())
-  requestId      String
-  request        BookingRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  service        String
-  kg             Int
-  unitPrice     Int
-  priceLabel    String         // Formatted price e.g., "1,200"
-  subtotal      Int
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  id         String         @id @default(cuid())
+  requestId  String
+  request    BookingRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  service    String
+  kg         Int
+  unitPrice  Int
+  priceLabel String // Formatted price e.g., "1,200"
+  subtotal   Int
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
 
   @@unique([id])
   @@index([requestId])

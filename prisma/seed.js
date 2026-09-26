@@ -28,9 +28,12 @@ async function main() {
   
   const adminUser = await prisma.adminUser.upsert({
     where: { email: adminEmail },
-    update: { passwordHash },
+    update: { passwordHash, username: 'admin', name: 'Administrator', role: 'admin', active: true },
     create: {
       email: adminEmail,
+      username: 'admin',
+      name: 'Administrator',
+      role: 'admin',
       passwordHash,
     },
   });
@@ -142,9 +145,6 @@ async function main() {
   // ============================================
   console.log('\n5. Importing booking requests...');
 
-  await prisma.bookingRequest.deleteMany();
-  await prisma.bookingItem.deleteMany();
-
   let requestsData = [];
   try {
     const requestsFile = await fs.readFile(path.join(dataDir, 'requests.json'), 'utf8');
@@ -153,7 +153,8 @@ async function main() {
     console.log('   ⚠ No existing requests to import');
   }
 
-  if (requestsData.length > 0) {
+  const existingBookingCount = await prisma.bookingRequest.count();
+  if (requestsData.length > 0 && existingBookingCount === 0) {
     for (const request of requestsData) {
       // Generate a new receipt token (don't reuse old ones)
       const receiptToken = generateReceiptToken();
@@ -197,6 +198,8 @@ async function main() {
     
     const bookingRequests = await prisma.bookingRequest.findMany();
     console.log(`   ✓ Imported ${bookingRequests.length} booking requests`);
+  } else if (existingBookingCount > 0) {
+    console.log(`   ✓ Preserved ${existingBookingCount} existing booking records`);
   }
 
   console.log('\n✅ Database seed completed successfully!');

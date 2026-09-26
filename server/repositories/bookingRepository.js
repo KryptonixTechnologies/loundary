@@ -163,7 +163,12 @@ export const bookingRepository = {
   // Get recent bookings for dashboard
   async getRecentBookings(limit = 5) {
     return prisma.bookingRequest.findMany({
-      include: { items: true },
+      include: {
+        items: true,
+        createdBy: {
+          select: { id: true, name: true, username: true, email: true },
+        },
+      },
       orderBy: { createdAt: 'desc' },
       take: limit,
     });
@@ -227,7 +232,7 @@ export const bookingRepository = {
 
   // Update booking status
   async updateBookingStatus(id, status) {
-    const allowedStatuses = ['new', 'confirmed', 'completed', 'cancelled'];
+    const allowedStatuses = ['new', 'confirmed', 'booked', 'awaiting_processing', 'washing', 'drying', 'ironing', 'ready_for_collection', 'cancelled'];
     if (!allowedStatuses.includes(status)) {
       throw new Error(`Invalid status: ${status}`);
     }
@@ -238,7 +243,7 @@ export const bookingRepository = {
     });
   },
 
-  // Delete a booking request (only completed ones)
+  // Business records are retained for reporting and cannot be deleted.
   async deleteBooking(id) {
     const request = await prisma.bookingRequest.findUnique({
       where: { id },
@@ -248,13 +253,7 @@ export const bookingRepository = {
       throw new Error('Request not found');
     }
     
-    if (request.status !== 'completed') {
-      throw new Error('Only completed requests can be removed');
-    }
-    
-    return prisma.bookingRequest.delete({
-      where: { id },
-    });
+    throw new Error('Booking records cannot be deleted');
   },
 
   // Delete all bookings (for testing/reset)

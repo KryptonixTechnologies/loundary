@@ -3,12 +3,10 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
   Plus,
-  ShoppingCart,
+  ClipboardList,
   Users,
   CreditCard,
   BarChart3,
-  Settings,
-  Database,
   LogOut,
   ArrowLeft,
   Menu,
@@ -23,24 +21,20 @@ import './POSLayout.css';
 
 const navItems = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/new-order', label: 'New Sale', icon: Plus },
-  { to: '/orders', label: 'Orders', icon: ShoppingCart },
   { to: '/customers', label: 'Customers', icon: Users },
+  { to: '/new-order', label: 'New Booking', icon: Plus },
+  { to: '/orders', label: 'Bookings', icon: ClipboardList },
   { to: '/payments', label: 'Payments', icon: CreditCard },
   { to: '/reports', label: 'Reports', icon: BarChart3 },
-  { to: '/offline-pos', label: 'Offline', icon: Database },
-  { to: '/settings', label: 'Settings', icon: Settings },
 ];
 
 const titles = {
   '/dashboard': 'Dashboard',
-  '/new-order': 'New Sale',
-  '/orders': 'Orders',
+  '/new-order': 'New Booking',
+  '/orders': 'Bookings',
   '/customers': 'Customers',
   '/payments': 'Payments',
   '/reports': 'Reports',
-  '/offline-pos': 'Offline POS',
-  '/settings': 'Settings',
 };
 
 function SyncBadge({ isOnline, backendDown, pendingCount }) {

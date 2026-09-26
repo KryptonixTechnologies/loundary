@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Plus, Minus, Trash2, Search, Download, Printer, CheckCircle, AlertCircle, Receipt as ReceiptIcon } from 'lucide-react';
 import { useOffline, useOfflineCustomers } from './hooks/useOffline.js';
 import { addToCart, setLineQty, removeFromCart, cartTotal, cartCount, buildOfflineOrder, clampQty } from './lib/pos.js';
@@ -24,17 +24,17 @@ function randomToken() {
 
 export default function POSSalePage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const {
     isOnline, backendDown, pendingCount, catalog, catalogSyncedAt,
-    createCustomerOffline, processOutbox,
+    processOutbox,
   } = useOffline();
   const { customers } = useOfflineCustomers();
 
   const [cart, setCart] = useState([]);
   const [search, setSearch] = useState('');
   const [qtyByService, setQtyByService] = useState({});
-  const [customerName, setCustomerName] = useState('');
-  const [customerPhone, setCustomerPhone] = useState('');
+  const [selectedCustomerId, setSelectedCustomerId] = useState(location.state?.customerId || '');
   const [paymentMethod, setPaymentMethod] = useState('Cash');
   const [mpesaPhone, setMpesaPhone] = useState('');
   const [notes, setNotes] = useState('');
@@ -53,13 +53,7 @@ export default function POSSalePage() {
     );
   }, [catalog, search]);
 
-  const matchingCustomers = useMemo(() => {
-    const q = (customerName.trim() + ' ' + customerPhone.trim()).toLowerCase();
-    if (q.trim().length < 2) return [];
-    return customers
-      .filter((c) => `${c.name || ''} ${c.phone || ''}`.toLowerCase().includes(q.trim()))
-      .slice(0, 5);
-  }, [customers, customerName, customerPhone]);
+  const selectedCustomer = customers.find((customer) => String(customer.id) === String(selectedCustomerId));
 
   const total = cartTotal(cart);
   const count = cartCount(cart);
@@ -77,30 +71,19 @@ export default function POSSalePage() {
       setError('Your cart is empty. Add at least one service first.');
       return;
     }
-    const phone = customerPhone.replace(/[\s-]/g, '');
-    if (phone && !/^[+\d][\d\s-]{5,29}$/.test(customerPhone)) {
-      setError('That phone number does not look valid.');
+    if (!selectedCustomer) {
+      setError('Select a registered customer before saving the booking.');
       return;
     }
+    const phone = selectedCustomer.phone.replace(/[\s-]/g, '');
     if (paymentMethod === 'M-Pesa' && !KENYAN_PHONE.test(mpesaPhone.replace(/[\s-]/g, ''))) {
       setError('Enter a valid Kenyan M-Pesa number (e.g. 0712 345 678).');
       return;
     }
     setBusy(true);
     try {
-      const name = customerName.trim() || 'Walk-in';
-      // Grow the local customer cache (separate queued operation).
-      if (phone) {
-        const known = customers.some((c) => c.phone === phone);
-        if (!known) {
-          try {
-            await createCustomerOffline({ name, phone });
-          } catch {
-            // Non-fatal: the order itself is what must persist.
-          }
-        }
-      }
-      const order = buildOfflineOrder({ cart, customerName: name, paymentMethod, notes: notes.trim() });
+      const name = selectedCustomer.name;
+      const order = buildOfflineOrder({ cart, customerName: name, customerPhone: phone, customerId: selectedCustomer.externalId || null, customerClientId: selectedCustomer.clientId, paymentMethod, notes: notes.trim() });
       const payment = {
         orderId: null, // linked to the local order row below
         amount: total,
@@ -231,8 +214,7 @@ export default function POSSalePage() {
               className="btn-secondary"
               onClick={() => {
                 setCompleted(null);
-                setCustomerName('');
-                setCustomerPhone('');
+                setSelectedCustomerId('');
                 setMpesaPhone('');
                 setNotes('');
               }}
@@ -362,46 +344,13 @@ export default function POSSalePage() {
           </div>
 
           <div className="sale-field">
-            <label htmlFor="sale-customer-name">Customer name</label>
-            <input
-              id="sale-customer-name"
-              type="text"
-              placeholder="Walk-in"
-              value={customerName}
-              onChange={(e) => setCustomerName(e.target.value)}
-              autoComplete="off"
-            />
-          </div>
-          <div className="sale-field">
-            <label htmlFor="sale-customer-phone">Customer phone</label>
-            <input
-              id="sale-customer-phone"
-              type="tel"
-              placeholder="0700 000 000"
-              value={customerPhone}
-              onChange={(e) => setCustomerPhone(e.target.value)}
-              autoComplete="off"
-            />
-            {matchingCustomers.length > 0 && (
-              <div role="listbox" aria-label="Matching customers">
-                {matchingCustomers.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    role="option"
-                    aria-selected="false"
-                    className="btn-secondary"
-                    style={{ marginTop: 'var(--space-1)', width: '100%' }}
-                    onClick={() => {
-                      setCustomerName(c.name || '');
-                      setCustomerPhone(c.phone || '');
-                    }}
-                  >
-                    {c.name} · {c.phone}
-                  </button>
-                ))}
-              </div>
-            )}
+            <label htmlFor="sale-customer">Registered customer *</label>
+            <select id="sale-customer" required value={selectedCustomerId} onChange={(event) => setSelectedCustomerId(event.target.value)}>
+              <option value="">Select customer</option>
+              {customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name} · {customer.phone}</option>)}
+            </select>
+            <small>Customer details can only be registered or changed from the Customers page.</small>
+            {customers.length === 0 && <button type="button" className="btn-secondary" onClick={() => navigate('/customers')}>Register a customer</button>}
           </div>
           <div className="sale-field">
             <label htmlFor="sale-payment">Payment method</label>

@@ -56,10 +56,13 @@ export function cartCount(cart) {
 }
 
 /** Build the offline order record from cart + customer + payment. */
-export function buildOfflineOrder({ cart, customerName, paymentMethod = 'Cash', notes = '' }) {
+export function buildOfflineOrder({ cart, customerName, customerPhone = '', customerId = null, customerClientId = null, paymentMethod = 'Cash', notes = '' }) {
   const total = cartTotal(cart);
   return {
     customerName: (customerName || 'Walk-in').trim() || 'Walk-in',
+    customerPhone,
+    customerId,
+    customerClientId,
     service: cart.map((l) => `${l.service} x${l.qty}`).join(', ') || 'Wash & Fold',
     totalAmount: total,
     quantity: cartCount(cart),

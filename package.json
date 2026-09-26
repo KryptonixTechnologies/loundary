@@ -23,6 +23,8 @@
     "db:seed": "node prisma/seed.js",
     "db:studio": "prisma studio",
     "db:reset": "prisma migrate reset --force && npm run db:seed",
+    "db:backup": "node server/scripts/backup.js",
+    "db:restore": "node server/scripts/restore.js",
     "postinstall": "prisma generate"
   },
   "dependencies": {
