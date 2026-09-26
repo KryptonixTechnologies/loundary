@@ -22,21 +22,33 @@ export default function AdminDashboard() {
   const [data, setData] = useState(null);
   const [message, setMessage] = useState('');
   const [tab, setTab] = useState('overview');
+  const [loadError, setLoadError] = useState('');
 
   async function load() {
+    setLoadError('');
     try {
       const response = await fetch('/api/admin/dashboard');
       if (response.ok) {
         setData(await response.json());
-      } else {
+      } else if (response.status === 401) {
+        // Session genuinely expired — re-authenticate.
         navigate('/login');
         return;
+      } else {
+        setLoadError(`Dashboard unavailable (HTTP ${response.status}). Please try again.`);
       }
     } catch {
-      navigate('/login');
+      // Network failure (offline/backend down) is NOT an expired session:
+      // stay in the POS and offer a retry instead of bouncing to login.
+      setLoadError(
+        navigator.onLine === false
+          ? 'You are offline. Showing the last loaded data when available — reconnect and retry.'
+          : 'Cannot reach the server. Check the connection and retry.'
+      );
       return;
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   useEffect(() => {
@@ -98,12 +110,26 @@ export default function AdminDashboard() {
     });
 
   if (loading) return <div className="admin-shell">Loading dashboard…</div>;
+  if (loadError && !data) {
+    return (
+      <div className="pos-page">
+        <header className="pos-page-header">
+          <div>
+            <p className="eyebrow">Business dashboard</p>
+            <h2>Dashboard unavailable.</h2>
+          </div>
+        </header>
+        <p className="sale-notice error" role="alert">{loadError}</p>
+        <button className="btn-primary" onClick={load}>Retry</button>
+      </div>
+    );
+  }
   if (!data) return null;
 
   const max = Math.max(1, ...data.daily.map((day) => day.count));
   return (
     <div className="dashboard">
-      <main>
+      <div>
         <header className="dash-header">
           <div>
             <p className="eyebrow">Business dashboard</p>
@@ -111,6 +137,11 @@ export default function AdminDashboard() {
           </div>
         </header>
         {message && <p className="admin-message success">{message}</p>}
+        {loadError && (
+          <p className="sale-notice error" role="alert">
+            {loadError} <button className="btn-secondary" onClick={load}>Retry</button>
+          </p>
+        )}
         {tab === 'overview' && (
           <>
             <section className="stat-grid">
@@ -307,7 +338,7 @@ export default function AdminDashboard() {
             </button>
           </form>
         )}
-      </main>
+      </div>
     </div>
   );
 }
@@ -315,6 +346,15 @@ export default function AdminDashboard() {
 function Recent({ requests, onStatus, onDelete }) {
   const [viewing, setViewing] = useState(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!viewing) return;
+    function onKeyDown(event) {
+      if (event.key === 'Escape') setViewing(null);
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [viewing]);
 
   return (
     <section className="dash-box request-list">
@@ -384,7 +424,7 @@ function Recent({ requests, onStatus, onDelete }) {
           onClick={() => setViewing(null)}
         >
           <div onClick={(event) => event.stopPropagation()}>
-            <button className="modal-close" onClick={() => setViewing(null)}>
+            <button className="modal-close" onClick={() => setViewing(null)} aria-label="Close dialog">
               <X size={16} />
             </button>
             <p className="eyebrow">{viewing.receiptNumber || 'Customer request'}</p>

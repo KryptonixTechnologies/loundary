@@ -24,19 +24,43 @@ export default function ReportsPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
+  const [loadError, setLoadError] = useState('');
 
-  useEffect(() => {
+  function load() {
+    setLoadError('');
     fetch('/api/admin/dashboard')
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then((result) => {
         setData(result);
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch(() => {
+        setLoading(false);
+        setLoadError(
+          navigator.onLine === false
+            ? 'You are offline. Reports need a server connection — reconnect and retry.'
+            : 'Cannot reach the server. Check the connection and retry.'
+        );
+      });
+  }
+
+  useEffect(() => {
+    load();
   }, []);
 
   if (loading) return <div className="pos-page"><h2>Reports</h2><p>Loading reports…</p></div>;
-  if (!data) return null;
+  if (!data) return (
+    <div className="pos-page">
+      <header className="pos-page-header">
+        <div>
+          <p className="eyebrow">Reports</p>
+          <h2>Business analytics.</h2>
+        </div>
+      </header>
+      <p className="sale-notice error" role="alert">{loadError || 'Reports unavailable.'}</p>
+      <button className="btn-primary" onClick={() => { setLoading(true); load(); }}>Retry</button>
+    </div>
+  );
 
   const { stats, daily, requests } = data;
 

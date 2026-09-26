@@ -7,16 +7,29 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
   const [message, setMessage] = useState('');
+  const [loadError, setLoadError] = useState('');
   const [activeTab, setActiveTab] = useState('overview');
 
-  useEffect(() => {
+  function load() {
+    setLoadError('');
     fetch('/api/admin/dashboard')
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then((result) => {
         setData(result);
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch(() => {
+        setLoading(false);
+        setLoadError(
+          navigator.onLine === false
+            ? 'You are offline. Settings need a server connection — reconnect and retry.'
+            : 'Cannot reach the server. Check the connection and retry.'
+        );
+      });
+  }
+
+  useEffect(() => {
+    load();
   }, []);
 
   function saveSettings() {
@@ -34,7 +47,18 @@ export default function SettingsPage() {
   }
 
   if (loading) return <div className="pos-page"><h2>Settings</h2><p>Loading settings…</p></div>;
-  if (!data) return null;
+  if (!data) return (
+    <div className="pos-page">
+      <header className="pos-page-header">
+        <div>
+          <p className="eyebrow">Settings</p>
+          <h2>Business configuration.</h2>
+        </div>
+      </header>
+      <p className="sale-notice error" role="alert">{loadError || 'Settings unavailable.'}</p>
+      <button className="btn-primary" onClick={() => { setLoading(true); load(); }}>Retry</button>
+    </div>
+  );
 
   return (
     <div className="pos-page">
