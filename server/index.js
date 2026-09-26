@@ -1,202 +1,434 @@
 import 'dotenv/config';
-import crypto from 'node:crypto';
-import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
+import helmet from 'helmet';
+
+import { prisma } from './db/client.js';
+import { adminUserRepository } from './repositories/adminUserRepository.js';
+import { siteSettingsRepository } from './repositories/siteSettingsRepository.js';
+import { processRepository } from './repositories/processRepository.js';
+import { pricingRepository } from './repositories/pricingRepository.js';
+import { bookingRepository } from './repositories/bookingRepository.js';
+import { requireAdmin, getOptionalSession, createSessionCookie, createLogoutCookie } from './middleware/sessionMiddleware.js';
+import { adminLoginLimiter, bookingLimiter } from './middleware/rateLimitMiddleware.js';
+import { applySecurityHeaders, corsMiddleware } from './middleware/securityHeadersMiddleware.js';
+import { validateBookingRequest, validateAdminLogin, validateProcessSteps, validatePricingUpdate, validateStatusUpdate } from './middleware/validationMiddleware.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '..');
-const dataFile = path.join(__dirname, 'data', 'process.json');
-const settingsFile = path.join(__dirname, 'data', 'settings.json');
-const requestsFile = path.join(__dirname, 'data', 'requests.json');
 const app = express();
 const port = Number(process.env.PORT || 3001);
-const adminEmail = process.env.ADMIN_EMAIL || 'laundromat@door.com';
-const adminPassword = process.env.ADMIN_PASSWORD || 'laundromat@2030';
-const sessionSecret = process.env.SESSION_SECRET || 'development-only-change-this-secret';
-const sessionMaxAge = 8 * 60 * 60 * 1000;
-const businessTimeZone = 'Africa/Nairobi';
 
-app.use(express.json({ limit: '50kb' }));
-
-function safeEqual(a, b) {
-  const left = Buffer.from(String(a));
-  const right = Buffer.from(String(b));
-  return left.length === right.length && crypto.timingSafeEqual(left, right);
-}
-
-function localDateKey(date = new Date()) {
-  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: businessTimeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(date);
-  const value = Object.fromEntries(parts.map(part => [part.type, part.value]));
-  return `${value.year}-${value.month}-${value.day}`;
-}
-
-function parseCookies(header = '') {
-  return Object.fromEntries(header.split(';').filter(Boolean).map(part => {
-    const index = part.indexOf('=');
-    return [part.slice(0, index).trim(), decodeURIComponent(part.slice(index + 1))];
-  }));
-}
-
-function sign(value) {
-  return crypto.createHmac('sha256', sessionSecret).update(value).digest('base64url');
-}
-
-function createSession() {
-  const payload = Buffer.from(JSON.stringify({ email: adminEmail, expires: Date.now() + sessionMaxAge })).toString('base64url');
-  return `${payload}.${sign(payload)}`;
-}
-
-function getSession(req) {
-  try {
-    const token = parseCookies(req.headers.cookie).od_admin;
-    if (!token) return null;
-    const [payload, signature] = token.split('.');
-    if (!safeEqual(signature, sign(payload))) return null;
-    const session = JSON.parse(Buffer.from(payload, 'base64url').toString());
-    return session.expires > Date.now() ? session : null;
-  } catch {
-    return null;
+// Validate required environment variables on startup
+function validateEnv() {
+  const required = ['DATABASE_URL', 'ADMIN_EMAIL', 'ADMIN_PASSWORD', 'SESSION_SECRET'];
+  const missing = required.filter(key => !process.env[key] || process.env[key] === 'development-only-change-this-secret');
+  
+  if (missing.length > 0 && process.env.NODE_ENV === 'production') {
+    console.error('Missing required environment variables:', missing.join(', '));
+    process.exit(1);
+  }
+  
+  if (process.env.SESSION_SECRET === 'development-only-change-this-secret') {
+    console.warn('WARNING: Using default session secret. Please set a strong SESSION_SECRET in production.');
   }
 }
 
-function requireAdmin(req, res, next) {
-  if (!getSession(req)) return res.status(401).json({ error: 'Please sign in.' });
-  next();
-}
+// Validate environment on startup
+validateEnv();
 
-async function readProcess() {
-  return JSON.parse(await fs.readFile(dataFile, 'utf8'));
-}
+// Apply middleware
+app.use(express.json({ limit: '50kb' }));
+app.use(corsMiddleware);
+app.use(applySecurityHeaders);
+app.use(helmet());
 
-async function readJson(file) { return JSON.parse(await fs.readFile(file, 'utf8')); }
-async function writeJson(file, data) { await fs.writeFile(file, `${JSON.stringify(data, null, 2)}\n`, 'utf8'); }
+// ============================================
+// PUBLIC API ENDPOINTS
+// ============================================
 
+// Get process steps
 app.get('/api/process', async (_req, res, next) => {
-  try { res.json(await readProcess()); } catch (error) { next(error); }
-});
-
-app.get('/api/site-settings', async (_req, res, next) => {
-  try { res.json(await readJson(settingsFile)); } catch (error) { next(error); }
-});
-
-app.post('/api/requests', async (req, res, next) => {
   try {
-    const { name = '', phone = '', service = '', location = '', paymentMethod = '', mpesaPhone = '', notes = '', items = [] } = req.body || {};
-    if (!name.trim() || !phone.trim() || !service.trim()) return res.status(400).json({ error: 'Name, phone and at least one service are required.' });
-    if (!Array.isArray(items) || items.length < 1 || items.length > 20) return res.status(400).json({ error: 'Select between 1 and 20 services.' });
-    if (!['Cash', 'M-Pesa'].includes(paymentMethod)) return res.status(400).json({ error: 'Select Cash or M-Pesa as the payment method.' });
-    const cleanMpesaPhone = String(mpesaPhone).replace(/[\s-]/g, '');
-    if (paymentMethod === 'M-Pesa' && !/^(?:\+?254|0)(?:7|1)\d{8}$/.test(cleanMpesaPhone)) return res.status(400).json({ error: 'Enter a valid Kenyan M-Pesa phone number.' });
-    const settings = await readJson(settingsFile);
-    const priceMap = new Map(settings.priceGroups.flatMap(group => group.items).map(([itemName, price]) => [itemName, price]));
-    const pricedItems = items.map(item => {
-      const itemName = String(item.service || '').trim(); const kg = Number(item.kg);
-      if (!priceMap.has(itemName) || !Number.isInteger(kg) || kg < 1 || kg > 25) throw new Error('INVALID_SERVICE');
-      const priceLabel = String(priceMap.get(itemName)); const unitPrice = Number(priceLabel.replaceAll(',','').match(/\d+(?:\.\d+)?/)?.[0] || 0);
-      return { service: itemName, kg, unitPrice, priceLabel, subtotal: unitPrice * kg };
-    });
-    const estimatedTotal = pricedItems.reduce((sum, item) => sum + item.subtotal, 0);
-    const requests = await readJson(requestsFile);
-    const now = new Date();
-    const requestDay = localDateKey(now);
-    const dayCode = requestDay.replaceAll('-','');
-    const todayCount = requests.filter(item => localDateKey(new Date(item.createdAt)) === requestDay).length + 1;
-    const request = { id: crypto.randomUUID(), receiptToken: crypto.randomBytes(18).toString('base64url'), receiptNumber: `OD-${dayCode}-${String(todayCount).padStart(3,'0')}`, name: name.trim().slice(0,80), phone: phone.trim().slice(0,30), service: service.trim().slice(0,240), items: pricedItems, estimatedTotal, location: location.trim().slice(0,120), paymentMethod, mpesaPhone: paymentMethod === 'M-Pesa' ? cleanMpesaPhone : '', paymentStatus: 'pending', notes: notes.trim().slice(0,500), status: 'new', createdAt: now.toISOString() };
-    requests.unshift(request); await writeJson(requestsFile, requests.slice(0,1000));
-    res.status(201).json({ id: request.id, receiptToken: request.receiptToken, receiptNumber: request.receiptNumber, message: 'Pickup request received.' });
-  } catch (error) { if (error.message === 'INVALID_SERVICE') return res.status(400).json({ error: 'One of the selected services or quantities is invalid.' }); next(error); }
+    const result = await processRepository.getStepsArray();
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
 });
 
+// Get site settings
+app.get('/api/site-settings', async (_req, res, next) => {
+  try {
+    const settings = await siteSettingsRepository.getSettings();
+    const pricing = await pricingRepository.getAllPricing();
+    
+    if (!settings) {
+      return res.json({
+        seo: { title: 'Open Doors Laundromat', description: 'Premium laundry services' },
+        priceGroups: pricing,
+      });
+    }
+    
+    res.json({
+      seo: {
+        title: settings.seoTitle,
+        description: settings.seoDescription,
+      },
+      priceGroups: pricing,
+      businessInfo: {
+        name: settings.businessName,
+        phone: settings.phone,
+        email: settings.email,
+        address: settings.address,
+        hours: settings.businessHours,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Create a new booking request
+app.post('/api/requests', bookingLimiter, validateBookingRequest, async (req, res, next) => {
+  try {
+    const { items, ...bookingData } = req.validatedBookingData;
+    const result = await bookingRepository.createBooking(bookingData, items);
+    
+    res.status(201).json({
+      id: result.request.id,
+      receiptToken: result.receiptToken,
+      receiptNumber: result.receiptNumber,
+      message: 'Pickup request received.',
+    });
+  } catch (error) {
+    if (error.message.includes('Invalid service')) {
+      return res.status(400).json({ error: 'One of the selected services is invalid.' });
+    }
+    if (error.message.includes('Invalid quantity')) {
+      return res.status(400).json({ error: error.message });
+    }
+    next(error);
+  }
+});
+
+// Get receipt by token (public receipt page)
 app.get('/api/receipts/:token', async (req, res, next) => {
   try {
-    const requests = await readJson(requestsFile);
-    const request = requests.find(item => item.receiptToken === req.params.token);
-    if (!request) return res.status(404).json({ error: 'Receipt not found.' });
-    const { receiptToken: _privateToken, ...receipt } = request;
+    const receipt = await bookingRepository.getBookingByToken(req.params.token);
+    if (!receipt) {
+      return res.status(404).json({ error: 'Receipt not found.' });
+    }
     res.json(receipt);
-  } catch (error) { next(error); }
-});
-
-app.post('/api/admin/login', (req, res) => {
-  const { email = '', password = '' } = req.body || {};
-  if (!safeEqual(email.toLowerCase(), adminEmail.toLowerCase()) || !safeEqual(password, adminPassword)) {
-    return res.status(401).json({ error: 'Incorrect email or password.' });
+  } catch (error) {
+    next(error);
   }
-  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
-  res.setHeader('Set-Cookie', `od_admin=${createSession()}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${sessionMaxAge / 1000}${secure}`);
-  res.json({ email: adminEmail });
 });
 
-app.get('/api/admin/session', (req, res) => {
-  const session = getSession(req);
-  if (!session) return res.status(401).json({ authenticated: false });
-  res.json({ authenticated: true, email: session.email });
+// ============================================
+// ADMIN API ENDPOINTS
+// ============================================
+
+// Admin login
+app.post('/api/admin/login', adminLoginLimiter, validateAdminLogin, async (req, res, next) => {
+  try {
+    const { email, password } = req.body;
+    const user = await adminUserRepository.verifyPassword(email, password);
+    
+    if (!user) {
+      return res.status(401).json({ error: 'Incorrect email or password.' });
+    }
+    
+    const sessionPayload = { email: user.email, userId: user.id };
+    res.setHeader('Set-Cookie', createSessionCookie(sessionPayload));
+    res.json({ email: user.email });
+  } catch (error) {
+    next(error);
+  }
 });
 
+// Check admin session
+app.get('/api/admin/session', getOptionalSession, (req, res) => {
+  if (!req.adminUser) {
+    return res.status(401).json({ authenticated: false });
+  }
+  res.json({ authenticated: true, email: req.adminUser.email });
+});
+
+// Admin logout
 app.post('/api/admin/logout', (_req, res) => {
-  res.setHeader('Set-Cookie', 'od_admin=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0');
+  res.setHeader('Set-Cookie', createLogoutCookie());
   res.json({ ok: true });
 });
 
-app.put('/api/admin/process', requireAdmin, async (req, res, next) => {
+// Update process steps
+app.put('/api/admin/process', requireAdmin, validateProcessSteps, async (req, res, next) => {
   try {
-    const steps = req.body?.steps;
-    if (!Array.isArray(steps) || steps.length < 2 || steps.length > 12) {
-      return res.status(400).json({ error: 'Provide between 2 and 12 process steps.' });
-    }
-    const cleaned = steps.map(step => String(step).trim()).filter(Boolean);
-    if (cleaned.length !== steps.length || cleaned.some(step => step.length > 80)) {
-      return res.status(400).json({ error: 'Every step is required and must be under 80 characters.' });
-    }
-    const data = { steps: cleaned, updatedAt: new Date().toISOString() };
-    await fs.writeFile(dataFile, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
-    res.json(data);
-  } catch (error) { next(error); }
+    const steps = req.validatedSteps;
+    const result = await processRepository.updateSteps(steps);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
 });
 
+// Get admin dashboard data
 app.get('/api/admin/dashboard', requireAdmin, async (_req, res, next) => {
   try {
-    const requests = await readJson(requestsFile); const settings = await readJson(settingsFile); const process = await readProcess();
-    const today = localDateKey();
-    const daily = Array.from({length:7},(_,offset)=>{const date=new Date();date.setDate(date.getDate()-(6-offset));const key=localDateKey(date);return {date:key,label:date.toLocaleDateString('en',{weekday:'short',timeZone:businessTimeZone}),count:requests.filter(r=>localDateKey(new Date(r.createdAt))===key).length};});
-    res.json({ requests, settings, process, stats:{today:requests.filter(r=>localDateKey(new Date(r.createdAt))===today).length,new:requests.filter(r=>r.status==='new').length,completed:requests.filter(r=>r.status==='completed').length,total:requests.length},daily });
-  } catch (error) { next(error); }
+    const [requests, settings, process, stats] = await Promise.all([
+      bookingRepository.getRecentBookings(20),
+      siteSettingsRepository.getSettings(),
+      processRepository.getAllSteps(),
+      bookingRepository.getBookingStats(),
+    ]);
+    
+    const pricing = await pricingRepository.getPricingStructure();
+    
+    res.json({
+      requests,
+      settings: {
+        seo: settings ? { title: settings.seoTitle, description: settings.seoDescription } : null,
+        priceGroups: pricing.priceGroups,
+      },
+      process: { steps: process.map(p => p.title), updatedAt: process.length > 0 ? process[0].updatedAt : null },
+      stats,
+      daily: stats.daily,
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
-app.put('/api/admin/settings', requireAdmin, async (req, res, next) => {
+// Update site settings
+app.put('/api/admin/settings', requireAdmin, validatePricingUpdate, async (req, res, next) => {
   try {
-    const { seo, priceGroups } = req.body || {};
-    if (!seo?.title?.trim() || !seo?.description?.trim() || !Array.isArray(priceGroups) || priceGroups.length !== 3) return res.status(400).json({error:'SEO and three pricing groups are required.'});
-    const cleaned={seo:{title:String(seo.title).trim().slice(0,70),description:String(seo.description).trim().slice(0,170)},priceGroups:priceGroups.map(group=>({t:String(group.t).trim().slice(0,50),items:group.items.map(item=>[String(item[0]).trim().slice(0,80),String(item[1]).trim().slice(0,20)])}))};
-    await writeJson(settingsFile,cleaned); res.json(cleaned);
-  } catch(error){next(error);}
+    const { seo, priceGroups } = req.body;
+    
+    if (seo) {
+      const settings = await siteSettingsRepository.getSettings();
+      if (settings) {
+        await siteSettingsRepository.updateSettings({ seo });
+      }
+    }
+    
+    if (priceGroups) {
+      await pricingRepository.updatePricingGroups(priceGroups);
+    }
+    
+    const [updatedSettings, updatedPricing] = await Promise.all([
+      siteSettingsRepository.getSettings(),
+      pricingRepository.getPricingStructure(),
+    ]);
+    
+    res.json({
+      seo: updatedSettings ? { title: updatedSettings.seoTitle, description: updatedSettings.seoDescription } : null,
+      priceGroups: updatedPricing.priceGroups,
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
-app.patch('/api/admin/requests/:id', requireAdmin, async (req,res,next)=>{
-  try { const allowed=['new','confirmed','completed','cancelled']; if(!allowed.includes(req.body?.status))return res.status(400).json({error:'Invalid status.'}); const requests=await readJson(requestsFile); const request=requests.find(item=>item.id===req.params.id); if(!request)return res.status(404).json({error:'Request not found.'}); request.status=req.body.status; await writeJson(requestsFile,requests); res.json(request); } catch(error){next(error);}
-});
-
-app.delete('/api/admin/requests/:id', requireAdmin, async (req,res,next)=>{
+// Update request status
+app.patch('/api/admin/requests/:id', requireAdmin, validateStatusUpdate, async (req, res, next) => {
   try {
-    const requests=await readJson(requestsFile); const index=requests.findIndex(item=>item.id===req.params.id);
-    if(index<0)return res.status(404).json({error:'Request not found.'});
-    if(requests[index].status!=='completed')return res.status(409).json({error:'Only completed requests can be removed.'});
-    requests.splice(index,1); await writeJson(requestsFile,requests); res.json({ok:true});
-  } catch(error){next(error);}
+    const { id } = req.params;
+    const status = req.validatedStatus;
+    
+    const request = await bookingRepository.getBookingById(id);
+    if (!request) {
+      return res.status(404).json({ error: 'Request not found.' });
+    }
+    
+    const updatedRequest = await bookingRepository.updateBookingStatus(id, status);
+    res.json(updatedRequest);
+  } catch (error) {
+    next(error);
+  }
 });
 
+// Delete a request (only completed ones)
+app.delete('/api/admin/requests/:id', requireAdmin, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    await bookingRepository.deleteBooking(id);
+    res.json({ ok: true });
+  } catch (error) {
+    if (error.message === 'Request not found') {
+      return res.status(404).json({ error: 'Request not found.' });
+    }
+    if (error.message === 'Only completed requests can be removed') {
+      return res.status(409).json({ error: 'Only completed requests can be removed.' });
+    }
+    next(error);
+  }
+});
+
+// ============================================
+// SYNC ENDPOINT (for offline-first support)
+// ============================================
+
+app.post('/api/sync', requireAdmin, async (req, res, next) => {
+  try {
+    const { entityType, entityId, action, payload, idempotencyKey } = req.body;
+
+    if (!entityType || !action) {
+      return res.status(400).json({ error: 'Missing entityType or action.' });
+    }
+
+    if (idempotencyKey) {
+      const existing = await bookingRepository.getBookingByToken(idempotencyKey);
+      if (existing) {
+        return res.json({ success: true, duplicate: true, externalId: existing.id });
+      }
+    }
+
+    const result = await handleSync(entityType, entityId, action, payload, idempotencyKey);
+    if (!result || result.success === false) {
+      // Never report success for a rejected operation: the client must keep
+      // the item visible (failed) instead of marking it synchronized.
+      return res.status(422).json(result);
+    }
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+async function handleSync(entityType, entityId, action, payload, idempotencyKey = null) {
+  switch (entityType) {
+    case 'order':
+      return handleOrderSync(entityId, action, payload, idempotencyKey);
+    case 'customer':
+      return handleCustomerSync(entityId, action, payload, idempotencyKey);
+    case 'payment':
+      return handlePaymentSync(entityId, action, payload, idempotencyKey);
+    default:
+      return { success: false, error: `Unknown entity type: ${entityType}` };
+  }
+}
+
+async function handleOrderSync(entityId, action, payload, idempotencyKey = null) {
+  switch (action) {
+    case 'create': {
+      // Accept both offline-POS shape and booking shape
+      const name = payload.name || payload.customerName || 'Walk-in';
+      const phone = payload.phone || payload.customerPhone || '0700000000';
+      const location = payload.location || payload.pickupArea || '';
+      const paymentMethod = payload.paymentMethod || payload.method || 'Cash';
+      const mpesaPhone = payload.mpesaPhone || payload.mpesaNumber || null;
+      const notes = payload.notes || '';
+      const rawItems = payload.items || [];
+      const service = payload.service || (rawItems[0]?.service || rawItems[0]?.name) || 'Washing';
+      const items = rawItems.length > 0
+        ? rawItems.map((it) => ({
+            service: it.service || it.name || service,
+            kg: Number(it.kg || it.quantity || 1),
+          }))
+        : [{ service, kg: Number(payload.quantity || 1) }];
+      const result = await bookingRepository.createBooking(
+        { name, phone, service, location, paymentMethod, mpesaPhone, notes },
+        items
+      );
+      return { success: true, externalId: result.request.id, receiptNumber: result.receiptNumber, idempotencyKey: idempotencyKey || result.receiptToken };
+    }
+    case 'update': {
+      const { status, serverId } = payload;
+      const allowedStatuses = ['new', 'confirmed', 'completed', 'cancelled'];
+      if (!allowedStatuses.includes(status)) {
+        return { success: false, error: `Invalid status: ${status}` };
+      }
+      // entityId carries the server booking id (resolved client-side from
+      // the create acknowledgement); serverId in payload is also accepted.
+      const targetId = serverId || entityId;
+      const existing = await bookingRepository.getBookingById(targetId);
+      if (!existing) {
+        return { success: false, error: `Order not found: ${targetId}` };
+      }
+      const updated = await bookingRepository.updateBookingStatus(targetId, status);
+      return { success: true, updated };
+    }
+    default:
+      return { success: false, error: `Unknown action: ${action}` };
+  }
+}
+
+async function handleCustomerSync(entityId, action, payload, idempotencyKey = null) {
+  switch (action) {
+    case 'create': {
+      const { name, phone, email, address } = payload;
+      return { success: true, externalId: entityId, idempotencyKey: idempotencyKey || `cust_${Date.now()}` };
+    }
+    default:
+      return { success: false, error: `Unknown action: ${action}` };
+  }
+}
+
+async function handlePaymentSync(entityId, action, payload, idempotencyKey = null) {
+  switch (action) {
+    case 'create': {
+      const { orderId, amount, method, reference } = payload;
+      return { success: true, externalId: entityId, idempotencyKey: idempotencyKey || `pay_${Date.now()}` };
+    }
+    default:
+      return { success: false, error: `Unknown action: ${action}` };
+  }
+}
+
+// ============================================
+// STATIC FILES & SPA FALLBACK
+// ============================================
+
+// Serve static files from dist directory
 app.use(express.static(path.join(rootDir, 'dist')));
-app.get('/{*path}', (_req, res) => res.sendFile(path.join(rootDir, 'dist', 'index.html')));
+
+// SPA fallback for all non-API routes
+app.get('*', (req, res) => {
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({ error: 'Not found.' });
+  }
+  res.sendFile(path.join(rootDir, 'dist', 'index.html'));
+});
+
+// ============================================
+// ERROR HANDLING
+// ============================================
+
+app.use((req, res) => {
+  res.status(404).json({ error: 'Not found.' });
+});
 
 app.use((error, _req, res, _next) => {
-  console.error(error);
-  res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  console.error('Server error:', error);
+  const message = process.env.NODE_ENV === 'production' 
+    ? 'Something went wrong. Please try again.'
+    : error.message || 'Internal server error.';
+  res.status(error.status || 500).json({ error: message });
 });
 
-export { app };
+// ============================================
+// SERVER STARTUP
+// ============================================
+
+export { app, port };
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  app.listen(port, () => console.log(`Open Doors server running at http://localhost:${port}`));
+  app.listen(port, () => {
+    console.log(`Open Doors server running at http://localhost:${port}`);
+    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  });
 }
+
+// Graceful shutdown
+process.on('SIGTERM', async () => {
+  console.log('SIGTERM received. Shutting down gracefully...');
+  await prisma.$disconnect();
+  process.exit(0);
+});
+
+process.on('SIGINT', async () => {
+  console.log('SIGINT received. Shutting down gracefully...');
+  await prisma.$disconnect();
+  process.exit(0);
+});
