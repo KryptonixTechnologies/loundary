@@ -184,7 +184,7 @@ export default function BookingForm() {
     <section className="booking">
       <div>
         <p className="eyebrow">Quick request</p>
-        <h2>Schedule your pickup.</h2>
+        <h1>Schedule your pickup.</h1>
         <p>
           Select one or more services, choose the kilograms or quantity, and see your estimated
           price instantly.

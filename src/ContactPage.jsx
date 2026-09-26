@@ -2,11 +2,11 @@ import React from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useNavigate } from 'react-router-dom';
 import { ArrowUpRight, Phone, MapPin, Clock, Mail, MessageCircle } from 'lucide-react';
-import { MarketingLayout, business } from './MarketingLayout.jsx';
+import { business, SITE_URL } from './MarketingLayout.jsx';
 
 const structuredData = {
   "@context": "https://schema.org",
-  "@type": "LocalBusiness",
+  "@type": "Laundromat",
   "name": business.name,
   "description": "Contact Open Doors Laundromat in Kitengela, Kenya for laundry services.",
   "address": {
@@ -17,23 +17,28 @@ const structuredData = {
   },
   "telephone": business.phone,
   "email": business.email,
-  "url": "https://open-doors-laundory.vercel.app/contact",
-  "sameAs": [business.whatsapp],
+  "url": `${SITE_URL}/contact`,
+  "image": [`${SITE_URL}/assets/storefront.jpg`],
   "openingHours": ["Mo-Sa 08:00-21:00", "Su 14:00-19:00"]
 };
 
 export default function ContactPage() {
   const navigate = useNavigate();
   return (
-    <MarketingLayout>
+    <>
       <Helmet>
         <title>Contact Us | Open Doors Laundromat</title>
         <meta name="description" content="Contact Open Doors Laundromat in Kitengela, Kenya. Phone, email, WhatsApp, and location." />
-        <link rel="canonical" href="/contact" />
+        <link rel="canonical" href={`${SITE_URL}/contact`} />
         <meta property="og:title" content="Contact Us | Open Doors Laundromat" />
         <meta property="og:description" content="Contact Open Doors Laundromat." />
         <meta property="og:type" content="website" />
-        <meta property="og:url" content="https://open-doors-laundory.vercel.app/contact" />
+        <meta property="og:url" content={`${SITE_URL}/contact`} />
+        <meta property="og:image" content={`${SITE_URL}/assets/storefront.jpg`} />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Contact Us | Open Doors Laundromat" />
+        <meta name="twitter:description" content="Contact Open Doors Laundromat." />
+        <meta name="twitter:image" content={`${SITE_URL}/assets/storefront.jpg`} />
         <script type="application/ld+json">{JSON.stringify(structuredData)}</script>
       </Helmet>
 
@@ -41,7 +46,7 @@ export default function ContactPage() {
         <div className="section-head">
           <div>
             <p className="eyebrow">Contact us</p>
-            <h2>Get in touch.</h2>
+            <h1>Get in touch.</h1>
           </div>
           <p>We are here to help with your laundry needs.</p>
         </div>
@@ -91,13 +96,13 @@ export default function ContactPage() {
             </button>
           </div>
           <div className="contact-map">
-            <img src="/assets/laundry-machines.jpg" alt="Open Doors Laundromat location" loading="lazy" />
+            <img src="/assets/storefront.jpg" alt="Chuna Mall, home of Open Doors Laundromat, Shop 10" loading="lazy" />
             <div className="map-overlay">
               <p>Chuna Mall, Ground Floor, Shop 10, Kitengela</p>
             </div>
           </div>
         </div>
       </section>
-    </MarketingLayout>
+    </>
   );
 }

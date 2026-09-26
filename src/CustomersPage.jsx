@@ -1,131 +1,110 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  ClipboardList,
+  Search,
+  Phone,
+  DollarSign,
+  MapPin,
+} from 'lucide-react';
+import { useOfflineCustomers } from './hooks/useOffline.js';
+import { upsertServerCustomers } from './lib/db.js';
 
 export default function CustomersPage() {
-  const [orders, setOrders] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const navigate = useNavigate();
+  const { customers, loading, refresh } = useOfflineCustomers();
+  const [search, setSearch] = useState('');
+  const [serverKnown, setServerKnown] = useState(true);
 
+  // Local-first: Dexie renders immediately; server refreshes the mirror
+  // when online (by phone, without touching pending local rows).
   useEffect(() => {
+    let cancelled = false;
+    if (!navigator.onLine) {
+      setServerKnown(false);
+      return;
+    }
     fetch('/api/admin/dashboard')
-      .then(async (response) => {
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.error || 'Failed to load customers');
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then(async (data) => {
+        await upsertServerCustomers(data.requests || []);
+        if (!cancelled) {
+          refresh();
+          setServerKnown(true);
         }
-
-        return data;
       })
-      .then((data) => {
-        setOrders(data.requests || []);
-      })
-      .catch((err) => {
-        setError(err.message);
-      })
-      .finally(() => {
-        setLoading(false);
+      .catch(() => {
+        if (!cancelled) setServerKnown(false);
       });
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [refresh]);
 
-  const customers = useMemo(() => {
-    const customerMap = new Map();
+  const filtered = search
+    ? customers.filter(
+        (c) =>
+          (c.name || '').toLowerCase().includes(search.toLowerCase()) ||
+          (c.phone || '').includes(search)
+      )
+    : customers;
 
-    orders.forEach((order) => {
-      const key = order.phone || order.name;
-
-      if (!customerMap.has(key)) {
-        customerMap.set(key, {
-          name: order.name,
-          phone: order.phone,
-          location: order.location || '-',
-          orders: 0,
-          total: 0,
-          lastOrder: order.createdAt,
-        });
-      }
-
-      const customer = customerMap.get(key);
-
-      customer.orders += 1;
-      customer.total += Number(order.estimatedTotal || 0);
-
-      if (
-        new Date(order.createdAt) > new Date(customer.lastOrder)
-      ) {
-        customer.lastOrder = order.createdAt;
-      }
-    });
-
-    return Array.from(customerMap.values()).sort(
-      (a, b) => b.orders - a.orders
-    );
-  }, [orders]);
-
-  if (loading) {
-    return (
-      <main className="page-container">
-        <p>Loading customers...</p>
-      </main>
-    );
-  }
-
-  if (error) {
-    return (
-      <main className="page-container">
-        <h1>Customers</h1>
-        <p>{error}</p>
-      </main>
-    );
-  }
+  if (loading) return <div className="pos-page"><h2>Customers</h2><p>Loading customers…</p></div>;
 
   return (
-    <main className="page-container">
-      <section className="page-header">
-        <h1>Customers</h1>
-        <p>View customers based on their laundry orders.</p>
-      </section>
-
-      <div className="orders-table-wrapper">
-        <table className="orders-table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Phone</th>
-              <th>Location</th>
-              <th>Orders</th>
-              <th>Total Spent</th>
-              <th>Last Order</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {customers.map((customer) => (
-              <tr
-                key={`${customer.phone}-${customer.name}`}
-              >
-                <td>{customer.name}</td>
-                <td>{customer.phone}</td>
-                <td>{customer.location}</td>
-                <td>{customer.orders}</td>
-                <td>
-                  KES {customer.total.toLocaleString()}
-                </td>
-                <td>
-                  {new Date(
-                    customer.lastOrder
-                  ).toLocaleDateString()}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        {customers.length === 0 && (
-          <p className="empty-state">
-            No customers found.
-          </p>
-        )}
-      </div>
-    </main>
+    <div className="pos-page">
+      <header className="pos-page-header">
+        <div>
+          <p className="eyebrow">Customers</p>
+          <h2>Customer directory.</h2>
+        </div>
+        <div className="pos-search">
+          <Search size={18} />
+          <input
+            type="search"
+            placeholder="Search by name or phone…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            aria-label="Search customers by name or phone"
+          />
+        </div>
+      </header>
+      {!serverKnown && (
+        <p className="sale-notice offline" role="status">
+          Showing {customers.length} customer(s) saved on this device. Connect to see the latest server directory.
+        </p>
+      )}
+      {filtered.length === 0 ? (
+        <div className="empty-state">
+          <ClipboardList size={28} />
+          <h3>No customers found</h3>
+          <p>{customers.length === 0 ? 'New customers are saved automatically with each sale.' : 'No customers match this search.'}</p>
+        </div>
+      ) : (
+        <div className="customer-list">
+          {filtered.map((customer) => (
+            <article key={customer.id} className="customer-card">
+              <div className="customer-card-header">
+                <div>
+                  <b>{customer.name}</b>
+                  <span>{customer.phone}</span>
+                </div>
+                {customer.syncStatus === 'pending' && (
+                  <span className="sync-status pending">⏳ Pending sync</span>
+                )}
+              </div>
+              <div className="customer-card-body">
+                {customer.address && <span><MapPin size={14} /> {customer.address}</span>}
+                {customer.phone && <span><Phone size={14} /> {customer.phone}</span>}
+                <span><DollarSign size={14} /> {customer.syncStatus === 'pending' ? 'New on this device' : 'Synced'}</span>
+              </div>
+              <div className="customer-card-actions">
+                <button onClick={() => navigate('/new-order')}>New sale</button>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
