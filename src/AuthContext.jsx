@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { grantOfflineAccess, clearOfflineAuth, resumeOfflineSession } from './lib/offlineAuth.js';
 
 const AuthContext = createContext(null);
 
@@ -31,7 +32,15 @@ export function AuthProvider({ children }) {
         setUser(null);
       }
     } catch {
-      setUser(null);
+      // Network unreachable (offline or backend down): fall back to a
+      // previously-granted offline session, if one exists on this device.
+      // No grant => user stays null and ProtectedRoute redirects to /login.
+      const grant = resumeOfflineSession();
+      if (grant) {
+        setUser({ email: grant.username, offline: true });
+      } else {
+        setUser(null);
+      }
     } finally {
       setLoading(false);
     }
@@ -63,6 +72,14 @@ export function AuthProvider({ children }) {
       }
       const data = await response.json();
       setUser({ email: data.email });
+      // Record an offline grant: allows this operator to resume the POS
+      // while offline on THIS device for 24h. Stores identity only —
+      // never the password. Revoked on logout.
+      try {
+        grantOfflineAccess({ username: data.email });
+      } catch {
+        // Non-fatal: online session works; offline resume just won't.
+      }
       return { success: true };
     } catch (err) {
       setError(err.message);
@@ -76,9 +93,27 @@ export function AuthProvider({ children }) {
     } catch {
       // Ignore logout errors
     } finally {
+      // Revoke the offline grant so a logged-out device cannot resume.
+      try {
+        clearOfflineAuth();
+      } catch {
+        // Ignore storage errors
+      }
       clearAuthState();
     }
   }, [clearAuthState]);
+
+  const continueOffline = useCallback(() => {
+    // Resume a granted offline session (e.g. from the login page when the
+    // network is unreachable). Returns true when a valid grant exists.
+    const grant = resumeOfflineSession();
+    if (grant) {
+      setUser({ email: grant.username, offline: true });
+      setError(null);
+      return true;
+    }
+    return false;
+  }, []);
 
   const clearError = useCallback(() => setError(null), []);
 
@@ -86,6 +121,7 @@ export function AuthProvider({ children }) {
     <AuthContext.Provider value={{
       user, loading, error, sessionExpired,
       login, logout, clearError, checkSession, handleUnauthorized,
+      continueOffline,
     }}>
       {children}
     </AuthContext.Provider>
