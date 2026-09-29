@@ -67,7 +67,7 @@ export function buildOfflineOrder({ cart, customerName, customerPhone = '', cust
     totalAmount: total,
     quantity: cartCount(cart),
     status: 'pending',
-    paymentStatus: paymentMethod === 'Cash' ? 'paid' : 'pending',
+    paymentStatus: paymentMethod === 'M-Pesa' ? 'pending' : 'paid',
     paymentMethod,
     items: cart.map((l) => ({
       name: l.service,

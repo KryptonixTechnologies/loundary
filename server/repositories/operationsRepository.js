@@ -78,7 +78,10 @@ export const operationsRepository = {
       let customerCode;
       do customerCode = `CUS-${crypto.randomInt(100000, 999999)}`;
       while (await tx.customer.findUnique({ where: { customerCode } }));
-      const customer = await tx.customer.create({ data: { customerCode, ...data } });
+      const customer = await tx.customer.create({
+        data: { customerCode, ...data, createdById: actorId || null },
+        include: { createdBy: { select: publicUser } },
+      });
       await audit(tx, actorId, 'customer.created', 'customer', customer.id);
       return customer;
     });
@@ -92,6 +95,7 @@ export const operationsRepository = {
       ] } : {},
       orderBy: { createdAt: 'desc' },
       take: 100,
+      include: { createdBy: { select: publicUser } },
     });
   },
 
@@ -175,7 +179,7 @@ export const operationsRepository = {
   },
 
   async recordPayment(bookingId, data, userId, idempotencyKey = null) {
-    if (!['Cash', 'M-Pesa'].includes(data.method)) throw Object.assign(new Error('Payment method must be Cash or M-Pesa.'), { status: 400 });
+    if (!['Cash', 'M-Pesa', 'Draft'].includes(data.method)) throw Object.assign(new Error('Payment method must be Cash, M-Pesa, or Draft.'), { status: 400 });
     const amount = Number(data.amount);
     if (!Number.isInteger(amount) || amount <= 0) throw Object.assign(new Error('Payment amount must be a positive whole number.'), { status: 400 });
     const reference = data.method === 'M-Pesa' ? String(data.mpesaReference || '').trim().toUpperCase() : null;
@@ -258,8 +262,9 @@ export const operationsRepository = {
     });
     const cash = payments.filter((x) => x.method === 'Cash');
     const mpesa = payments.filter((x) => x.method === 'M-Pesa');
+    const drafts = payments.filter((x) => x.method === 'Draft');
     return {
-      summary: { totalTransactions: payments.length, totalRevenue: payments.reduce((s, x) => s + x.amount, 0), totalCash: cash.reduce((s, x) => s + x.amount, 0), totalMpesa: mpesa.reduce((s, x) => s + x.amount, 0) },
+      summary: { totalTransactions: payments.length, totalRevenue: payments.reduce((s, x) => s + x.amount, 0), totalCash: cash.reduce((s, x) => s + x.amount, 0), totalMpesa: mpesa.reduce((s, x) => s + x.amount, 0), totalDraft: drafts.reduce((s, x) => s + x.amount, 0) },
       transactions: payments,
       services: [...services.values()],
       attendantActivity,

@@ -1672,7 +1672,14 @@ a.secondary:hover {
 
 .dashboard {
   display: flex;
+  width: 100%;
   min-height: calc(100vh - var(--space-12));
+}
+
+.dashboard-content {
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto;
 }
 
 .dashboard aside {
@@ -1805,7 +1812,7 @@ a.secondary:hover {
 /* Stat grid */
 .stat-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--space-5);
   margin-bottom: var(--space-8);
 }
@@ -1816,9 +1823,11 @@ a.secondary:hover {
   border-radius: var(--radius-md);
   padding: var(--space-5);
   box-shadow: var(--shadow-hard);
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-4);
+  min-height: 112px;
   transition: all var(--transition-normal);
 }
 
@@ -1831,6 +1840,7 @@ a.secondary:hover {
   width: 28px;
   height: 28px;
   color: var(--primary);
+  flex-shrink: 0;
 }
 
 .stat-grid span {
@@ -1843,6 +1853,7 @@ a.secondary:hover {
   font: 800 var(--text-2xl) var(--font-heading);
   display: block;
   color: var(--fg-primary);
+  line-height: 1;
 }
 
 /* Dash box */
@@ -1879,17 +1890,19 @@ a.secondary:hover {
 .bar-chart {
   display: flex;
   align-items: flex-end;
-  gap: var(--space-3);
-  height: 200px;
+  gap: clamp(var(--space-2), 2vw, var(--space-6));
+  height: 230px;
   padding-top: var(--space-4);
   border-bottom: 2px solid var(--border);
 }
 
 .bar-item {
   flex: 1;
+  height: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: flex-end;
   gap: var(--space-1);
 }
 
@@ -1900,7 +1913,7 @@ a.secondary:hover {
 
 .bar-item span {
   display: block;
-  width: 100%;
+  width: min(64px, 72%);
   background: var(--primary);
   border-radius: var(--radius-sm) var(--radius-sm) 0 0;
   min-height: 8px;
@@ -2667,10 +2680,14 @@ footer p {
 }
 
 /* ============================================================
-    ADMIN DASHBOARD RESPONSIVE
-    ============================================================ */
    ADMIN DASHBOARD RESPONSIVE
    ============================================================ */
+
+@media (max-width: 1100px) {
+  .stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
 
 @media (max-width: 850px) {
   .admin-card {
@@ -3241,6 +3258,284 @@ footer p {
   min-height: 40px;
 }
 
+.orders-page {
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 0;
+}
+
+.orders-page .pos-page-header {
+  height: auto;
+  min-height: 0;
+  position: static;
+  z-index: auto;
+  padding: 0 0 var(--space-5);
+  margin: 0 0 var(--space-5);
+  border: 0;
+  border-bottom: 2px solid var(--border);
+  background: transparent;
+}
+
+.orders-page .pos-page-header .eyebrow {
+  margin: 0 0 var(--space-2);
+}
+
+.orders-page .pos-page-header h2 {
+  margin: 0;
+}
+
+.booking-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 2px solid var(--fg-primary);
+  border-radius: var(--radius-sm);
+  background: var(--card-bg);
+  box-shadow: var(--shadow-hard);
+}
+
+.booking-table {
+  width: 100%;
+  min-width: 1040px;
+  border-collapse: collapse;
+  table-layout: fixed;
+  text-align: left;
+}
+
+.booking-table th {
+  padding: var(--space-3) var(--space-4);
+  border-right: 1px solid color-mix(in srgb, var(--bg-card) 28%, transparent);
+  border-bottom: 2px solid var(--fg-primary);
+  background: var(--fg-primary);
+  color: var(--fg-inverse);
+  font-size: var(--text-xs);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.booking-table th:last-child {
+  border-right: 0;
+}
+
+.booking-table th:nth-child(1) { width: 13%; }
+.booking-table th:nth-child(2) { width: 12%; }
+.booking-table th:nth-child(3) { width: 10%; }
+.booking-table th:nth-child(4) { width: 17%; }
+.booking-table th:nth-child(5) { width: 5%; }
+.booking-table th:nth-child(6) { width: 9%; }
+.booking-table th:nth-child(7) { width: 10%; }
+.booking-table th:nth-child(8) { width: 10%; }
+.booking-table th:nth-child(9) { width: 14%; }
+
+.booking-table td {
+  padding: clamp(var(--space-2), 1.1vw, var(--space-4));
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  color: var(--fg-primary);
+  font-size: clamp(12px, 0.85vw, var(--text-sm));
+  vertical-align: middle;
+  overflow-wrap: anywhere;
+}
+
+.booking-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.booking-table td:last-child {
+  border-right: 0;
+}
+
+.booking-table tbody tr:nth-child(even) {
+  background: color-mix(in srgb, var(--bg-muted) 55%, transparent);
+}
+
+.booking-table tbody tr:hover {
+  background: var(--bg-muted);
+}
+
+.booking-number-cell {
+  vertical-align: top;
+}
+
+.booking-number-cell > * {
+  display: block;
+}
+.booking-status-cell select {
+  width: 100%;
+  min-height: 40px;
+  padding: var(--space-2);
+  border: 2px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--card-bg);
+  color: var(--fg-primary);
+  font: 700 var(--text-sm) var(--font-body);
+}
+
+.booking-number-cell strong,
+.booking-amount-cell {
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.booking-number-cell small {
+  color: var(--warning);
+  margin-top: var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+
+.booking-services-cell {
+  color: var(--fg-secondary) !important;
+  line-height: 1.5;
+}
+.booking-payment-cell > * {
+  display: block;
+}
+
+.booking-payment-cell small {
+  margin-top: var(--space-1);
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+
+.payment-state {
+  width: fit-content;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  font-weight: 800;
+}
+
+.payment-state-paid {
+  background: var(--success-bg);
+  color: #1a6b4a;
+}
+
+.payment-state-pending {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+
+.booking-items-cell {
+  text-align: center;
+  font-weight: 800;
+}
+
+.booking-actions {
+  display: flex;
+  align-items: center;
+}
+
+.booking-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  min-height: 40px;
+  padding: var(--space-2) var(--space-3);
+  border: 2px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--card-bg);
+  color: var(--fg-primary);
+  font: 700 var(--text-sm) var(--font-body);
+  cursor: pointer;
+}
+
+.booking-actions button:hover {
+  border-color: var(--primary);
+  background: var(--bg-muted);
+}
+
+@media (max-width: 1180px) and (min-width: 761px) {
+  .booking-table th,
+  .booking-table td {
+    padding: var(--space-2);
+  }
+
+  .booking-actions button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 760px) {
+  .booking-table-wrap {
+    overflow: visible;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .booking-table,
+  .booking-table tbody,
+  .booking-table tr,
+  .booking-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .booking-table {
+    min-width: 0;
+  }
+
+  .booking-table thead {
+    display: none;
+  }
+
+  .booking-table tbody {
+    display: grid;
+    gap: var(--space-4);
+  }
+
+  .booking-table tr {
+    padding: var(--space-2) var(--space-4);
+    border: 2px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--card-bg);
+    box-shadow: var(--shadow-hard);
+  }
+
+  .booking-table td {
+    display: grid;
+    grid-template-columns: minmax(88px, 0.38fr) minmax(0, 1fr);
+    gap: var(--space-3);
+    padding: var(--space-3) 0;
+    border-bottom: 1px solid var(--border);
+    border-right: 0;
+    text-align: left;
+  }
+
+  .booking-table td::before {
+    content: attr(data-label);
+    color: var(--fg-muted);
+    font-size: var(--text-xs);
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .booking-table td:last-child {
+    border-bottom: 0;
+  }
+
+  .booking-number-cell {
+    display: grid;
+    grid-template-columns: minmax(88px, 0.38fr) minmax(0, 1fr);
+    justify-items: start;
+  }
+
+  .booking-number-cell::before {
+    grid-row: 1 / span 2;
+  }
+
+  .booking-items-cell {
+    text-align: left;
+  }
+}
+
 /* Badge */
 .badge {
   display: inline-block;
@@ -3254,6 +3549,11 @@ footer p {
 
 .badge-new { background: var(--info-bg); color: var(--info); }
 .badge-confirmed { background: var(--warning-bg); color: var(--warning); }
+.badge-booked { background: var(--info-bg); color: var(--info); }
+.badge-washing { background: var(--info-bg); color: var(--primary); }
+.badge-drying { background: var(--warning-bg); color: var(--warning); }
+.badge-ironing { background: var(--bg-surface); color: var(--primary-active); }
+.badge-ready_for_collection { background: var(--success-bg); color: #1a6b4a; }
 .badge-completed { background: var(--success-bg); color: #1a6b4a; }
 .badge-cancelled { background: var(--error-bg); color: var(--error); }
 .badge-success { background: var(--success-bg); color: #1a6b4a; }
@@ -3544,7 +3844,7 @@ footer p {
 }
 
 .payment-report-stats {
-  grid-template-columns: repeat(4, minmax(170px, 1fr));
+  grid-template-columns: repeat(5, minmax(150px, 1fr));
 }
 
 .payment-report-filters {
@@ -3608,7 +3908,7 @@ footer p {
 }
 
 .customer-table {
-  min-width: 940px;
+  min-width: 1080px;
 }
 
 .customer-table td:first-child strong,
@@ -3697,6 +3997,10 @@ footer p {
   margin-bottom: var(--space-4);
 }
 
+.customer-served-by-field {
+  grid-column: 1 / -1;
+}
+
 .customer-form-grid label {
   display: grid;
   gap: var(--space-1);
@@ -3720,6 +4024,10 @@ footer p {
 @media (max-width: 680px) {
   .customer-form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .customer-served-by-field {
+    grid-column: auto;
   }
 }
 

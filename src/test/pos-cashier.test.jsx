@@ -80,6 +80,44 @@ afterEach(() => {
 });
 
 describe('cashier workflow offline (real component, real Dexie)', () => {
+  it('accepts and stores a valid variable-length M-Pesa transaction code', async () => {
+    setOnline(false);
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('offline')));
+    const user = userEvent.setup();
+    renderSale();
+
+    await waitFor(() => expect(screen.getByText('Washing')).toBeInTheDocument());
+    await user.click(within(screen.getByText('Washing').closest('article')).getByRole('button', { name: /^add$/i }));
+    await user.selectOptions(screen.getByLabelText(/registered customer/i), screen.getByRole('option', { name: /server sam/i }));
+    await user.selectOptions(screen.getByLabelText(/payment method/i), 'M-Pesa');
+    await user.type(screen.getByLabelText(/m-pesa number/i), '0712345678');
+    await user.type(screen.getByLabelText(/m-pesa transaction code/i), 'HKSIIER');
+    await user.click(screen.getByRole('button', { name: /save booking/i }));
+
+    await waitFor(() => expect(screen.getByText(/booking saved/i)).toBeInTheDocument());
+    const payment = await db.payments.toCollection().first();
+    expect(payment).toMatchObject({ method: 'M-Pesa', reference: 'HKSIIER' });
+  });
+
+  it('saves Draft as a payment method without requiring M-Pesa fields', async () => {
+    setOnline(false);
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('offline')));
+    const user = userEvent.setup();
+    renderSale();
+
+    await waitFor(() => expect(screen.getByText('Washing')).toBeInTheDocument());
+    await user.click(within(screen.getByText('Washing').closest('article')).getByRole('button', { name: /^add$/i }));
+    await user.selectOptions(screen.getByLabelText(/registered customer/i), screen.getByRole('option', { name: /server sam/i }));
+    await user.selectOptions(screen.getByLabelText(/payment method/i), 'Draft');
+    expect(screen.queryByLabelText(/m-pesa number/i)).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /save booking/i }));
+
+    await waitFor(() => expect(screen.getByText(/booking saved/i)).toBeInTheDocument());
+    const payment = await db.payments.toCollection().first();
+    expect(payment.method).toBe('Draft');
+    expect(payment.reference).toMatch(/^DRAFT-/);
+  });
+
   it('completes a full sale offline: services → cart → qty → customer → cash → order → receipt', async () => {
     setOnline(false);
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('offline')));
@@ -106,10 +144,10 @@ describe('cashier workflow offline (real component, real Dexie)', () => {
     // Bookings can only use an existing registered customer.
     await user.selectOptions(screen.getByLabelText(/registered customer/i), screen.getByRole('option', { name: /server sam/i }));
 
-    await user.click(screen.getByRole('button', { name: /complete sale/i }));
+    await user.click(screen.getByRole('button', { name: /save booking/i }));
 
     // Completion screen with real receipt data.
-    await waitFor(() => expect(screen.getByText(/sale complete/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/booking saved/i)).toBeInTheDocument());
     expect(screen.getByText(/KSh 1,200/)).toBeInTheDocument();
 
     // Durable: order + cash payment + outbox rows in IndexedDB.
@@ -134,8 +172,8 @@ describe('cashier workflow offline (real component, real Dexie)', () => {
     const washingCard = screen.getByText('Washing').closest('article');
     await user.click(within(washingCard).getByRole('button', { name: /^add$/i }));
     await user.selectOptions(screen.getByLabelText(/registered customer/i), screen.getByRole('option', { name: /server sam/i }));
-    await user.click(screen.getByRole('button', { name: /complete sale/i }));
-    await waitFor(() => expect(screen.getByText(/sale complete/i)).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: /save booking/i }));
+    await waitFor(() => expect(screen.getByText(/booking saved/i)).toBeInTheDocument());
 
     // "Refresh": destroy React tree entirely, re-read the database.
     unmount();
@@ -164,9 +202,9 @@ describe('cashier workflow offline (real component, real Dexie)', () => {
       const card = screen.getByText('Washing').closest('article');
       await user.click(within(card).getByRole('button', { name: /^add$/i }));
       await user.selectOptions(screen.getByLabelText(/registered customer/i), screen.getByRole('option', { name: /server sam/i }));
-      await user.click(screen.getByRole('button', { name: /complete sale/i }));
-      await waitFor(() => expect(screen.getByText(/sale complete/i)).toBeInTheDocument());
-      await user.click(screen.getByRole('button', { name: /start new sale/i }));
+      await user.click(screen.getByRole('button', { name: /save booking/i }));
+      await waitFor(() => expect(screen.getByText(/booking saved/i)).toBeInTheDocument());
+      await user.click(screen.getByRole('button', { name: /start new booking/i }));
       await waitFor(() => expect(screen.getByText('Washing')).toBeInTheDocument());
     }
 
@@ -219,8 +257,8 @@ describe('cashier workflow offline (real component, real Dexie)', () => {
     const card = screen.getByText('Washing').closest('article');
     await user.click(within(card).getByRole('button', { name: /^add$/i }));
     await user.selectOptions(screen.getByLabelText(/registered customer/i), screen.getByRole('option', { name: /server sam/i }));
-    await user.click(screen.getByRole('button', { name: /complete sale/i }));
-    await waitFor(() => expect(screen.getByText(/sale complete/i)).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: /save booking/i }));
+    await waitFor(() => expect(screen.getByText(/booking saved/i)).toBeInTheDocument());
 
     setOnline(true);
     const pendingBefore = await db.outbox.where('status').equals('pending').toArray();
@@ -252,8 +290,8 @@ describe('restart durability (fresh database handle, same device)', () => {
     const card = screen.getByText('Washing').closest('article');
     await user.click(within(card).getByRole('button', { name: /^add$/i }));
     await user.selectOptions(screen.getByLabelText(/registered customer/i), screen.getByRole('option', { name: /server sam/i }));
-    await user.click(screen.getByRole('button', { name: /complete sale/i }));
-    await waitFor(() => expect(screen.getByText(/sale complete/i)).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: /save booking/i }));
+    await waitFor(() => expect(screen.getByText(/booking saved/i)).toBeInTheDocument());
     cleanup();
 
     // "Restart": drop every handle, reopen the same database from scratch.

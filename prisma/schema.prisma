@@ -30,6 +30,7 @@ model AdminUser {
   notifications   Notification[]
   closedBookings  BookingRequest[]       @relation("BookingClosedBy")
   auditLogs       AuditLog[]
+  customersServed Customer[]             @relation("CustomerCreatedBy")
 
   @@map("admin_users")
 }
@@ -114,7 +115,7 @@ model BookingRequest {
   phone          String
   location       String
   service        String?
-  paymentMethod  String // "M-Pesa" or "Cash"
+  paymentMethod  String // "M-Pesa", "Cash", or "Draft"
   mpesaPhone     String?
   notes          String?
   estimatedTotal Int
@@ -153,12 +154,16 @@ model Customer {
   email        String?
   gender       String?
   address      String?
+  servedByName String?
+  createdById  String?
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
   bookings     BookingRequest[]
+  createdBy    AdminUser?       @relation("CustomerCreatedBy", fields: [createdById], references: [id])
 
   @@index([name])
   @@index([phone])
+  @@index([createdById])
   @@map("customers")
 }
 

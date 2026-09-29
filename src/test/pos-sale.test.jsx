@@ -184,7 +184,7 @@ describe('POS vs marketing routing separation', () => {
       </HelmetProvider>
     );
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'New sale.' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Create a new booking' })).toBeInTheDocument();
     });
     // Inside POS shell (sidebar brand), not marketing layout.
     expect(screen.getAllByText('OPEN DOORS').length).toBeGreaterThanOrEqual(1);

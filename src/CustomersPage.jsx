@@ -18,7 +18,7 @@ export default function CustomersPage() {
   const [search, setSearch] = useState('');
   const [serverKnown, setServerKnown] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ name: '', phone: '', email: '', gender: '' });
+  const [form, setForm] = useState({ name: '', phone: '', email: '', gender: '', servedBy: '' });
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -52,8 +52,9 @@ export default function CustomersPage() {
     setFormError('');
     const name = form.name.trim();
     const phone = form.phone.replace(/[\s-]/g, '');
-    if (!name || !phone) {
-      setFormError('Full name and contact number are required.');
+    const servedBy = form.servedBy.trim();
+    if (!name || !phone || !servedBy) {
+      setFormError('Full name, contact number, and served by are required.');
       return;
     }
     if (!/^[+\d][\d\s-]{5,29}$/.test(form.phone)) {
@@ -70,10 +71,16 @@ export default function CustomersPage() {
     }
     setSaving(true);
     try {
-      await createCustomerOffline({ name, phone, email: form.email.trim() || null, gender: form.gender || null });
+      await createCustomerOffline({
+        name,
+        phone,
+        email: form.email.trim() || null,
+        gender: form.gender || null,
+        servedBy,
+      });
       if (isOnline && !backendDown) await processOutbox();
       await refresh();
-      setForm({ name: '', phone: '', email: '', gender: '' });
+      setForm({ name: '', phone: '', email: '', gender: '', servedBy: '' });
       setShowForm(false);
     } catch {
       setFormError('Could not save this customer. Please try again.');
@@ -133,8 +140,18 @@ export default function CustomersPage() {
             <label>
               <span>Gender</span>
               <select value={form.gender} onChange={(event) => setForm({ ...form, gender: event.target.value })}>
-                <option value="">Select gender</option><option value="Female">Female</option><option value="Male">Male</option><option value="Other">Other</option><option value="Prefer not to say">Prefer not to say</option>
+                <option value="">Select gender</option><option value="Female">Female</option><option value="Male">Male</option>
               </select>
+            </label>
+            <label className="customer-served-by-field">
+              <span>Served by *</span>
+              <input
+                required
+                value={form.servedBy}
+                onChange={(event) => setForm({ ...form, servedBy: event.target.value })}
+                placeholder="Enter attendant name"
+                autoComplete="name"
+              />
             </label>
           </div>
           <div className="form-actions">
@@ -163,6 +180,7 @@ export default function CustomersPage() {
                 <th scope="col">Contact</th>
                 <th scope="col">Email</th>
                 <th scope="col">Gender</th>
+                <th scope="col">Served by</th>
                 <th scope="col">Sync status</th>
                 <th scope="col">Actions</th>
               </tr>
@@ -189,6 +207,7 @@ export default function CustomersPage() {
                     ) : <span className="customer-empty-value">Not provided</span>}
                   </td>
                   <td>{customer.gender || <span className="customer-empty-value">Not provided</span>}</td>
+                  <td>{customer.servedByName || customer.servedBy || customer.createdBy?.name || customer.createdBy?.username || customer.createdBy?.email || <span className="customer-empty-value">Not recorded</span>}</td>
                   <td>
                     <span className={`sync-status ${customer.syncStatus === 'pending' ? 'pending' : 'synced'}`}>
                       {customer.syncStatus === 'pending' ? 'Pending sync' : 'Synced'}

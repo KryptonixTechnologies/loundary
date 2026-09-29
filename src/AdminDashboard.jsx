@@ -129,7 +129,7 @@ export default function AdminDashboard() {
   const max = Math.max(1, ...data.daily.map((day) => day.count));
   return (
     <div className="dashboard">
-      <div>
+      <div className="dashboard-content">
         <header className="dash-header">
           <div>
             <p className="eyebrow">Business dashboard</p>

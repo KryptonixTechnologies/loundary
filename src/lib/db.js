@@ -393,6 +393,7 @@ export async function upsertServerOrders(serverRequests) {
       notes: req.notes || '',
       receiptNumber: req.receiptNumber || null,
       receiptToken: req.receiptToken || null,
+      createdBy: req.createdBy || null,
       syncStatus: 'synced',
       createdAt: req.createdAt || now,
       updatedAt: now,
@@ -415,7 +416,21 @@ export async function upsertServerCustomers(serverRequests) {
   for (const req of serverRequests || []) {
     if (!req || !req.phone) continue;
     const existing = await db.customers.where('phone').equals(req.phone).first();
-    if (existing) continue;
+    const servedBy = req.servedByName || req.createdBy?.name || req.createdBy?.username || req.createdBy?.email || null;
+    if (existing) {
+      if (existing.syncStatus !== 'pending') {
+        await db.customers.update(existing.id, {
+          externalId: req.id || existing.externalId || null,
+          createdBy: req.createdBy || existing.createdBy || null,
+          servedByName: req.servedByName || existing.servedByName || null,
+          servedBy: servedBy || existing.servedBy || null,
+          updatedAt: now,
+          lastSyncedAt: now,
+        });
+      }
+      mirrored += 1;
+      continue;
+    }
     await db.customers.add({
       clientId: `server_${req.phone}`,
       externalId: req.id || null,
@@ -424,6 +439,9 @@ export async function upsertServerCustomers(serverRequests) {
       email: req.email || '',
       gender: req.gender || '',
       address: req.location || '',
+      createdBy: req.createdBy || null,
+      servedByName: req.servedByName || null,
+      servedBy,
       syncStatus: 'synced',
       createdAt: req.createdAt || now,
       updatedAt: now,

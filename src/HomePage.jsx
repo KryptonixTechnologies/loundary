@@ -23,7 +23,7 @@ const structuredData = {
     "Su 14:00-19:00"
   ],
   "areaServed": ["Kitengela", "Kisaju", "Isinya", "Athi River", "Mlolongo", "Kajiado"],
-  "paymentAccepted": ["Cash", "M-Pesa"],
+  "paymentAccepted": ["Cash", "M-Pesa", "Draft"],
   "image": [`${SITE_URL}/assets/laundry-machines.jpg`]
 };
 
@@ -141,7 +141,7 @@ export default function HomePage() {
             </div>
           ))}
         </div>
-        <p className="status-note"><PackageCheck size={16} /> Pay by Cash or M-Pesa. A printed or PDF receipt is issued for every order.</p>
+        <p className="status-note"><PackageCheck size={16} /> Pay by Cash, M-Pesa, or Draft. A printed or PDF receipt is issued for every order.</p>
       </section>
 
       <section className="location-section" id="location">

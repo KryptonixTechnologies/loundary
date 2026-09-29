@@ -7,7 +7,7 @@ const money = (value) => `KSh ${Number(value || 0).toLocaleString()}`;
 export default function PaymentsPage() {
   const navigate = useNavigate();
   const [payments, setPayments] = useState([]);
-  const [summary, setSummary] = useState({ totalTransactions: 0, totalRevenue: 0, totalCash: 0, totalMpesa: 0 });
+  const [summary, setSummary] = useState({ totalTransactions: 0, totalRevenue: 0, totalCash: 0, totalMpesa: 0, totalDraft: 0 });
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [search, setSearch] = useState('');
@@ -65,6 +65,7 @@ export default function PaymentsPage() {
     totalRevenue: filtered.reduce((sum, payment) => sum + payment.amount, 0),
     totalCash: filtered.filter((payment) => payment.method === 'Cash').reduce((sum, payment) => sum + payment.amount, 0),
     totalMpesa: filtered.filter((payment) => payment.method === 'M-Pesa').reduce((sum, payment) => sum + payment.amount, 0),
+    totalDraft: filtered.filter((payment) => payment.method === 'Draft').reduce((sum, payment) => sum + payment.amount, 0),
   };
   const filtersActive = search || method || attendant || service || from || to;
 
@@ -85,6 +86,7 @@ export default function PaymentsPage() {
         <div className="stat-card"><ClipboardList size={20} /><div><small>Transactions</small><b>{filteredSummary.totalTransactions}</b></div></div>
         <div className="stat-card"><DollarSign size={20} /><div><small>Total Revenue</small><b>{money(filteredSummary.totalRevenue)}</b></div></div>
         <div className="stat-card"><DollarSign size={20} /><div><small>Cash</small><b>{money(filteredSummary.totalCash)}</b></div></div>
+        <div className="stat-card"><DollarSign size={20} /><div><small>Draft</small><b>{money(filteredSummary.totalDraft)}</b></div></div>
         <div className="stat-card"><DollarSign size={20} /><div><small>M-Pesa</small><b>{money(filteredSummary.totalMpesa)}</b></div></div>
       </div>
 
@@ -101,7 +103,7 @@ export default function PaymentsPage() {
         <label>
           <span>Method</span>
           <select value={method} onChange={(event) => setMethod(event.target.value)}>
-            <option value="">All methods</option><option value="Cash">Cash</option><option value="M-Pesa">M-Pesa</option>
+            <option value="">All methods</option><option value="Cash">Cash</option><option value="M-Pesa">M-Pesa</option><option value="Draft">Draft</option>
           </select>
         </label>
         <label>

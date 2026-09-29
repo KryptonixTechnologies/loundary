@@ -107,7 +107,7 @@ export default function ServicesPage() {
           ))}
         </div>
         <p className="note">
-          Prices in Kenyan shillings. Pay by Cash or M-Pesa — a receipt is issued for every order.
+          Prices in Kenyan shillings. Pay by Cash, M-Pesa, or Draft — a receipt is issued for every order.
         </p>
       </section>
 

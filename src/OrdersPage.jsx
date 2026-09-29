@@ -8,7 +8,17 @@ import { useOfflineOrders } from './hooks/useOffline.js';
 import { upsertServerOrders } from './lib/db.js';
 import { generateReceiptPDF, downloadPDFReceipt } from './lib/receipt.js';
 
-const STATUSES = ['all', 'new', 'confirmed', 'completed', 'cancelled'];
+const STATUS_OPTIONS = [
+  { value: 'booked', label: 'Received' },
+  { value: 'washing', label: 'Washing' },
+  { value: 'drying', label: 'Drying' },
+  { value: 'ironing', label: 'Ironing' },
+  { value: 'ready_for_collection', label: 'Ready for collection' },
+];
+
+const LEGACY_STATUS = { new: 'booked', pending: 'booked', confirmed: 'booked' };
+const workflowStatus = (status) => LEGACY_STATUS[status] || status;
+const statusLabel = (status) => STATUS_OPTIONS.find((option) => option.value === workflowStatus(status))?.label || status;
 
 export default function OrdersPage() {
   const navigate = useNavigate();
@@ -73,7 +83,7 @@ export default function OrdersPage() {
 
   const filtered = filter === 'all'
     ? orders
-    : orders.filter((o) => o.status === filter);
+    : orders.filter((o) => workflowStatus(o.status) === filter);
 
   async function handleStatusChange(order, status) {
     setNotice('');
@@ -95,24 +105,24 @@ export default function OrdersPage() {
     }
   }
 
-  if (loading) return <div className="pos-page"><h2>Orders</h2><p>Loading orders…</p></div>;
+  if (loading) return <div className="pos-page orders-page"><h2>Bookings</h2><p>Loading bookings…</p></div>;
 
   return (
-    <div className="pos-page">
+    <div className="pos-page orders-page">
       <header className="pos-page-header">
         <div>
           <p className="eyebrow">Orders</p>
           <h2>All customer requests.</h2>
         </div>
         <div className="pos-filters" role="group" aria-label="Filter orders by status">
-          {STATUSES.map((s) => (
+          {[{ value: 'all', label: 'All' }, ...STATUS_OPTIONS].map((option) => (
             <button
-              key={s}
-              className={filter === s ? 'active' : ''}
-              onClick={() => setFilter(s)}
-              aria-pressed={filter === s}
+              key={option.value}
+              className={filter === option.value ? 'active' : ''}
+              onClick={() => setFilter(option.value)}
+              aria-pressed={filter === option.value}
             >
-              {s.charAt(0).toUpperCase() + s.slice(1)}
+              {option.label}
             </button>
           ))}
         </div>
@@ -128,50 +138,82 @@ export default function OrdersPage() {
       {filtered.length === 0 ? (
         <div className="empty-state">
           <ClipboardList size={28} />
-          <h3>No {filter === 'all' ? '' : filter} orders</h3>
+          <h3>No {filter === 'all' ? '' : statusLabel(filter)} bookings</h3>
           <p>{orders.length === 0 ? 'Create your first sale from New Sale.' : 'No orders match this filter.'}</p>
         </div>
       ) : (
-        <div className="order-list">
-          {filtered.map((order) => (
-            <article key={order.id} className="order-card">
-              <div className="order-card-header">
-                <div>
-                  <b>{order.customerName || order.name}</b>
-                  <span>{order.syncStatus === 'pending' ? '⏳ Pending sync' : (order.receiptNumber || '')}</span>
-                </div>
-                <span className={`badge badge-${order.status}`}>{order.status}</span>
-              </div>
-              <div className="order-card-body">
-                <p>{order.service}</p>
-                <small>Items: {(order.items || []).length}</small>
-                <b>KSh {(Number(order.totalAmount ?? order.estimatedTotal) || 0).toLocaleString()}</b>
-              </div>
-              <div className="order-card-actions">
-                {order.receiptToken ? (
-                  <button onClick={() => navigate(`/receipt/${order.receiptToken}`)}>
-                    <Eye size={16} /> View Receipt
-                  </button>
-                ) : (
-                  order.receiptNumber && (
-                    <button onClick={() => handleLocalReceipt(order)} title="Receipt saved on this device (pending sync)">
-                      <Eye size={16} /> Receipt (PDF)
-                    </button>
-                  )
-                )}
-                <select
-                  value={order.status}
-                  onChange={(e) => handleStatusChange(order, e.target.value)}
-                  aria-label={`Change status for order ${order.receiptNumber || order.id}`}
-                >
-                  <option value="new">New</option>
-                  <option value="confirmed">Confirmed</option>
-                  <option value="completed">Completed</option>
-                  <option value="cancelled">Cancelled</option>
-                </select>
-              </div>
-            </article>
-          ))}
+        <div className="booking-table-wrap">
+          <table className="booking-table">
+            <thead>
+              <tr>
+                <th>Booking</th>
+                <th>Status</th>
+                <th>Customer</th>
+                <th>Services</th>
+                <th>Items</th>
+                <th>Amount</th>
+                <th>Payment</th>
+                <th>Attendant</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((order) => {
+                const attendant = order.createdBy?.name
+                  || order.createdBy?.username
+                  || order.createdBy?.email
+                  || order.attendant
+                  || "Not recorded";
+                return (
+                  <tr key={order.id}>
+                    <td data-label="Booking" className="booking-number-cell">
+                      <strong>{order.receiptNumber || `Booking #${order.externalId || order.id}`}</strong>
+                      {order.syncStatus === "pending" && <small>Pending sync</small>}
+                    </td>
+                    <td data-label="Status" className="booking-status-cell">
+                      <select
+                        value={workflowStatus(order.status)}
+                        onChange={(e) => handleStatusChange(order, e.target.value)}
+                        aria-label={`Change status for order ${order.receiptNumber || order.id}`}
+                      >
+                        {STATUS_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                      </select>
+                    </td>
+                    <td data-label="Customer"><strong>{order.customerName || order.name || "Walk-in"}</strong></td>
+                    <td data-label="Services" className="booking-services-cell">{order.service || "No service details"}</td>
+                    <td data-label="Items" className="booking-items-cell">{(order.items || []).length}</td>
+                    <td data-label="Amount" className="booking-amount-cell">
+                      KSh {(Number(order.totalAmount ?? order.estimatedTotal) || 0).toLocaleString()}
+                    </td>
+                    <td data-label="Payment" className="booking-payment-cell">
+                      <span className={`payment-state payment-state-${order.paymentStatus === 'paid' ? 'paid' : 'pending'}`}>
+                        {order.paymentStatus === 'paid' ? 'Paid' : 'Pending'}
+                      </span>
+                      <small>{order.paymentMethod || 'Not selected'}</small>
+                    </td>
+                    <td data-label="Attendant">{attendant}</td>
+                    <td data-label="Action">
+                      <div className="booking-actions">
+                        {order.receiptToken ? (
+                          <button onClick={() => navigate(`/receipt/${order.receiptToken}`)}>
+                            <Eye size={16} /> Receipt
+                          </button>
+                        ) : (
+                          order.receiptNumber && (
+                            <button onClick={() => handleLocalReceipt(order)} title="Receipt saved on this device (pending sync)">
+                              <Eye size={16} /> PDF
+                            </button>
+                          )
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
     </div>

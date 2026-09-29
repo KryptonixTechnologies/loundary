@@ -299,7 +299,7 @@ app.post('/api/pos/customers', requireAdmin, async (req, res, next) => {
     const name = String(req.body?.name || '').trim();
     const phone = String(req.body?.phone || '').trim();
     if (!name || !phone) return res.status(400).json({ error: 'Customer name and phone number are required.' });
-    const customer = await operationsRepository.createCustomer({ name: name.slice(0, 80), phone: phone.slice(0, 30), email: req.body.email || null, gender: req.body.gender || null, address: req.body.address || null }, req.adminUser.userId);
+    const customer = await operationsRepository.createCustomer({ name: name.slice(0, 80), phone: phone.slice(0, 30), email: req.body.email || null, gender: req.body.gender || null, address: req.body.address || null, servedByName: String(req.body.servedBy || '').trim().slice(0, 80) || null }, req.adminUser.userId);
     res.status(201).json(customer);
   } catch (error) { next(error); }
 });
@@ -463,9 +463,9 @@ async function handleOrderSync(entityId, action, payload, idempotencyKey = null,
 async function handleCustomerSync(entityId, action, payload, idempotencyKey = null, userId = null) {
   switch (action) {
     case 'create': {
-      const { name, phone, email, gender, address } = payload;
+      const { name, phone, email, gender, address, servedBy } = payload;
       if (!name || !phone) return { success: false, error: 'Customer name and phone are required.' };
-      const customer = await operationsRepository.createCustomer({ name, phone, email: email || null, gender: gender || null, address: address || null }, userId);
+      const customer = await operationsRepository.createCustomer({ name, phone, email: email || null, gender: gender || null, address: address || null, servedByName: String(servedBy || '').trim().slice(0, 80) || null }, userId);
       if (idempotencyKey) await prisma.syncOperation.create({ data: { idempotencyKey, entityType: 'customer', clientEntityId: entityId, externalId: customer.id } });
       return { success: true, externalId: customer.id, idempotencyKey };
     }

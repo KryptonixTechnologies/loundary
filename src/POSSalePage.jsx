@@ -7,6 +7,7 @@ import { addOrderTransaction, updateLocalOrder, saveReceiptToLocal } from './lib
 import { generateReceiptPDF, downloadPDFReceipt, printReceipt } from './lib/receipt.js';
 
 const KENYAN_PHONE = /^(?:\+?254|0)(?:7|1)\d{8}$/;
+const MPESA_CODE = /^[A-Z0-9]{6,20}$/;
 
 function localReceiptNumber(orderId) {
   const day = new Date().toISOString().slice(0, 10).replace(/-/g, '');
@@ -37,6 +38,7 @@ export default function POSSalePage() {
   const [selectedCustomerId, setSelectedCustomerId] = useState(location.state?.customerId || '');
   const [paymentMethod, setPaymentMethod] = useState('Cash');
   const [mpesaPhone, setMpesaPhone] = useState('');
+  const [mpesaCode, setMpesaCode] = useState('');
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -80,6 +82,11 @@ export default function POSSalePage() {
       setError('Enter a valid Kenyan M-Pesa number (e.g. 0712 345 678).');
       return;
     }
+    const normalizedMpesaCode = mpesaCode.trim().toUpperCase();
+    if (paymentMethod === 'M-Pesa' && !MPESA_CODE.test(normalizedMpesaCode)) {
+      setError('Enter a valid M-Pesa transaction code (letters and numbers only).');
+      return;
+    }
     setBusy(true);
     try {
       const name = selectedCustomer.name;
@@ -88,7 +95,7 @@ export default function POSSalePage() {
         orderId: null, // linked to the local order row below
         amount: total,
         method: paymentMethod,
-        reference: `${paymentMethod.toUpperCase().slice(0, 4)}-${Date.now()}`,
+        reference: paymentMethod === 'M-Pesa' ? normalizedMpesaCode : `${paymentMethod.toUpperCase()}-${Date.now()}`,
         createdAt: new Date().toISOString(),
       };
       // Atomic: order + payment + outbox entries commit together.
@@ -180,11 +187,11 @@ export default function POSSalePage() {
 
   if (completed) {
     return (
-      <div className="pos-page">
+      <div className="pos-page sale-page">
         <header className="pos-page-header">
           <div>
-            <p className="eyebrow">Sale complete</p>
-            <h2>Order saved on this device.</h2>
+            <p className="eyebrow">Booking complete</p>
+            <h2>Booking saved on this device.</h2>
           </div>
         </header>
         <div className="sale-complete">
@@ -216,10 +223,11 @@ export default function POSSalePage() {
                 setCompleted(null);
                 setSelectedCustomerId('');
                 setMpesaPhone('');
+                setMpesaCode('');
                 setNotes('');
               }}
             >
-              <Plus size={18} /> Start new sale
+              <Plus size={18} /> Start new booking
             </button>
           </div>
         </div>
@@ -228,11 +236,12 @@ export default function POSSalePage() {
   }
 
   return (
-    <div className="pos-page">
+    <div className="pos-page sale-page">
       <header className="pos-page-header">
         <div>
-          <p className="eyebrow">Point of sale</p>
-          <h2>New sale.</h2>
+          <p className="eyebrow">Bookings</p>
+          <h2>Create a new booking</h2>
+          <p className="booking-intro">Select services, confirm the customer, and save the booking.</p>
         </div>
         {offline && (
           <p className="sale-notice offline" role="status">
@@ -248,8 +257,11 @@ export default function POSSalePage() {
       )}
 
       <div className="sale-layout">
-        <section className="sale-panel" aria-label="Services">
-          <h3>Services</h3>
+        <section className="sale-panel services-panel" aria-label="Services">
+          <div className="booking-section-heading">
+            <span className="booking-step">1</span>
+            <div><h3>Select services</h3><p>Choose each service and its quantity.</p></div>
+          </div>
           <div className="pos-search" style={{ marginBottom: 'var(--space-3)' }}>
             <Search size={18} />
             <input
@@ -309,7 +321,11 @@ export default function POSSalePage() {
         </section>
 
         <section className="sale-panel cart-panel" aria-label="Cart and checkout">
-          <h3>Cart {count > 0 && `(${count})`}</h3>
+          <div className="booking-section-heading">
+            <span className="booking-step">2</span>
+            <div><h3>Booking details</h3><p>Review services and confirm customer details.</p></div>
+          </div>
+          <h4 className="booking-subheading">Selected services {count > 0 && `(${count})`}</h4>
           {cart.length === 0 ? (
             <p className="cart-empty">Cart is empty. Add services from the list.</p>
           ) : (
@@ -343,6 +359,8 @@ export default function POSSalePage() {
             </div>
           </div>
 
+          <div className="booking-form-section">
+            <h4>Customer and payment</h4>
           <div className="sale-field">
             <label htmlFor="sale-customer">Registered customer *</label>
             <select id="sale-customer" required value={selectedCustomerId} onChange={(event) => setSelectedCustomerId(event.target.value)}>
@@ -357,6 +375,7 @@ export default function POSSalePage() {
             <select id="sale-payment" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
               <option value="Cash">Cash{offline ? ' (works offline)' : ''}</option>
               <option value="M-Pesa">M-Pesa{offline ? ' (queued, confirmed when online)' : ''}</option>
+              <option value="Draft">Draft{offline ? ' (works offline)' : ''}</option>
             </select>
           </div>
           {paymentMethod === 'M-Pesa' && (
@@ -372,6 +391,24 @@ export default function POSSalePage() {
               />
             </div>
           )}
+          {paymentMethod === 'M-Pesa' && (
+            <div className="sale-field">
+              <label htmlFor="sale-mpesa-code">M-Pesa transaction code *</label>
+              <input
+                id="sale-mpesa-code"
+                type="text"
+                placeholder="e.g. QGH7X2ABCD"
+                value={mpesaCode}
+                onChange={(e) => setMpesaCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 20))}
+                autoCapitalize="characters"
+                autoComplete="off"
+                minLength={6}
+                maxLength={20}
+                required
+              />
+              <small>Enter the code shown in the customer’s M-Pesa confirmation message.</small>
+            </div>
+          )}
           <div className="sale-field">
             <label htmlFor="sale-notes">Notes (optional)</label>
             <input
@@ -385,8 +422,9 @@ export default function POSSalePage() {
 
           <div className="sale-actions">
             <button type="button" className="btn-primary" onClick={handleComplete} disabled={busy || cart.length === 0}>
-              {busy ? 'Saving…' : `Complete sale · KSh ${total.toLocaleString()}`}
+              {busy ? 'Saving…' : `Save booking · KSh ${total.toLocaleString()}`}
             </button>
+          </div>
           </div>
         </section>
       </div>
