@@ -190,7 +190,6 @@ export default function CustomersPage() {
                 <tr key={customer.id}>
                   <td>
                     <strong>{customer.name}</strong>
-                    {customer.externalId && <small className="customer-code">ID: {String(customer.externalId).slice(0, 12)}</small>}
                   </td>
                   <td>
                     <span className="customer-detail">

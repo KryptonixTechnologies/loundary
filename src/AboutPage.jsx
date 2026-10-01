@@ -68,7 +68,7 @@ export default function AboutPage() {
   </div>
   <div className="about-highlight">
     <h3>Payment</h3>
-    <p>Cash, M-Pesa, and Draft accepted</p>
+    <p>Cash and M-Pesa accepted; unpaid bookings supported</p>
   </div>
 </div>
           </div>

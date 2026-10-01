@@ -10,6 +10,7 @@ import {
   Edit3,
   Eye,
   Package,
+  Printer,
   Search,
   Trash2,
   X,
@@ -29,6 +30,7 @@ export default function ReportsPage() {
   const [activitySearch, setActivitySearch] = useState('');
   const [activityDate, setActivityDate] = useState('');
   const [activityAttendant, setActivityAttendant] = useState('');
+  const [exportError, setExportError] = useState('');
 
   function load() {
     setLoadError('');
@@ -105,6 +107,27 @@ export default function ReportsPage() {
   });
   const filtersActive = activitySearch || activityDate || activityAttendant;
 
+  function clearReportPrintMode() {
+    document.body.classList.remove('print-all-reports', 'print-single-report');
+  }
+
+  function printAllReports() {
+    setExportError('');
+    document.body.classList.add('print-all-reports');
+    window.addEventListener('afterprint', clearReportPrintMode, { once: true });
+    window.print();
+  }
+
+  function printSingleReport(request) {
+    setExportError('');
+    setViewing(request);
+    setTimeout(() => {
+      document.body.classList.add('print-single-report');
+      window.addEventListener('afterprint', clearReportPrintMode, { once: true });
+      window.print();
+    }, 50);
+  }
+
   return (
     <div className="pos-page">
       <header className="pos-page-header">
@@ -156,24 +179,22 @@ export default function ReportsPage() {
         </div>
       </div>
       <div className="report-section">
-        <h3>Recent Activity</h3>
+        <div className="report-section-heading">
+          <h3>Recent Activity</h3>
+          <button type="button" className="statement-print-button" onClick={printAllReports}>
+            <Printer size={16} /> Print all reports
+          </button>
+        </div>
+        {exportError && <p className="sale-notice error" role="alert">{exportError}</p>}
         <div className="report-filters" aria-label="Activity filters">
           <label className="report-filter-search">
             <span>Search records</span>
             <div>
               <Search size={18} aria-hidden="true" />
-              <input
-                type="search"
-                value={activitySearch}
-                onChange={(event) => setActivitySearch(event.target.value)}
-                placeholder="ID, customer or item"
-              />
+              <input type="search" value={activitySearch} onChange={(event) => setActivitySearch(event.target.value)} placeholder="ID, customer or item" />
             </div>
           </label>
-          <label>
-            <span>Date</span>
-            <input type="date" value={activityDate} onChange={(event) => setActivityDate(event.target.value)} />
-          </label>
+          <label><span>Date</span><input type="date" value={activityDate} onChange={(event) => setActivityDate(event.target.value)} /></label>
           <label>
             <span>Attendant</span>
             <select value={activityAttendant} onChange={(event) => setActivityAttendant(event.target.value)}>
@@ -182,18 +203,10 @@ export default function ReportsPage() {
               <option value="Not recorded">Not recorded</option>
             </select>
           </label>
-          <button
-            type="button"
-            className="report-clear-button"
-            disabled={!filtersActive}
-            onClick={() => {
-              setActivitySearch('');
-              setActivityDate('');
-              setActivityAttendant('');
-            }}
-          >
-            <X size={16} aria-hidden="true" />
-            Clear
+          <button type="button" className="report-clear-button" disabled={!filtersActive} onClick={() => {
+            setActivitySearch(String()); setActivityDate(String()); setActivityAttendant(String());
+          }}>
+            <X size={16} aria-hidden="true" /> Clear
           </button>
         </div>
         <p className="report-result-count" aria-live="polite">
@@ -205,7 +218,7 @@ export default function ReportsPage() {
           <p className="empty-state">No records match these filters.</p>
         ) : (
           <div className="report-table-wrap">
-            <table className="report-table">
+            <table className="report-table activity-table">
               <thead>
                 <tr>
                   <th scope="col">ID</th>
@@ -260,15 +273,14 @@ export default function ReportsPage() {
                         </time>
                       </td>
                       <td>
-                        <button
-                          type="button"
-                          className="report-view-button"
-                          onClick={() => setViewing(req)}
-                          aria-label={`View details for ${req.receiptNumber || req.name}`}
-                        >
-                          <Eye size={16} />
-                          View
-                        </button>
+                        <div className="report-row-actions">
+                          <button type="button" className="report-view-button" onClick={() => setViewing(req)} aria-label={`View details for ${req.receiptNumber || req.name}`}>
+                            <Eye size={16} /> View
+                          </button>
+                          <button type="button" className="report-print-button" onClick={() => printSingleReport(req)} aria-label={`Print report for ${req.receiptNumber || req.name}`}>
+                            <Printer size={16} /> Print
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -307,7 +319,7 @@ export default function ReportsPage() {
               </span>
               <span>
                 <small>Payment</small>
-                <b>{viewing.paymentMethod || 'Not selected'} · {viewing.paymentStatus || 'pending'}</b>
+                <b>{viewing.paymentMethod === 'Draft' ? 'Unpaid' : (viewing.paymentMethod || 'Not selected')} · {viewing.paymentStatus || 'pending'}</b>
               </span>
               <span>
                 <small>Date &amp; time</small>

@@ -380,7 +380,7 @@ function Recent({ requests, onStatus, onDelete }) {
               </span>
               <small>
                 {item.receiptNumber || 'Legacy request'} ·{' '}
-                {item.paymentMethod || 'Payment not selected'} ·{' '}
+                {item.paymentMethod === 'Draft' ? 'Unpaid' : (item.paymentMethod || 'Payment not selected')} ·{' '}
                 {new Date(item.createdAt).toLocaleString()}
               </small>
             </div>
@@ -399,7 +399,6 @@ function Recent({ requests, onStatus, onDelete }) {
               <select value={item.status} onChange={(e) => onStatus(item.id, e.target.value)}>
                 <option value="new">New</option>
                 <option value="confirmed">Confirmed</option>
-                <option value="completed">Completed</option>
                 <option value="cancelled">Cancelled</option>
               </select>
               {item.status === 'completed' && (
@@ -440,7 +439,7 @@ function Recent({ requests, onStatus, onDelete }) {
               </span>
               <span>
                 <small>Payment</small>
-                <b>{viewing.paymentMethod || 'Not selected'}</b>
+                <b>{viewing.paymentMethod === 'Draft' ? 'Unpaid' : (viewing.paymentMethod || 'Not selected')}</b>
                 {viewing.mpesaPhone && <em>{viewing.mpesaPhone}</em>}
               </span>
               <span>

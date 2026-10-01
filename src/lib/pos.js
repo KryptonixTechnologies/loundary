@@ -56,18 +56,19 @@ export function cartCount(cart) {
 }
 
 /** Build the offline order record from cart + customer + payment. */
-export function buildOfflineOrder({ cart, customerName, customerPhone = '', customerId = null, customerClientId = null, paymentMethod = 'Cash', notes = '' }) {
+export function buildOfflineOrder({ cart, customerName, customerPhone = '', customerId = null, customerClientId = null, servedByName = null, paymentMethod = 'Cash', notes = '' }) {
   const total = cartTotal(cart);
   return {
     customerName: (customerName || 'Walk-in').trim() || 'Walk-in',
     customerPhone,
     customerId,
     customerClientId,
+    servedByName,
     service: cart.map((l) => `${l.service} x${l.qty}`).join(', ') || 'Wash & Fold',
     totalAmount: total,
     quantity: cartCount(cart),
     status: 'pending',
-    paymentStatus: paymentMethod === 'M-Pesa' ? 'pending' : 'paid',
+    paymentStatus: paymentMethod === 'Unpaid' ? 'pending' : 'paid',
     paymentMethod,
     items: cart.map((l) => ({
       name: l.service,

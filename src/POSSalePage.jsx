@@ -90,12 +90,14 @@ export default function POSSalePage() {
     setBusy(true);
     try {
       const name = selectedCustomer.name;
-      const order = buildOfflineOrder({ cart, customerName: name, customerPhone: phone, customerId: selectedCustomer.externalId || null, customerClientId: selectedCustomer.clientId, paymentMethod, notes: notes.trim() });
-      const payment = {
+      const order = buildOfflineOrder({ cart, customerName: name, customerPhone: phone, customerId: selectedCustomer.externalId || null, customerClientId: selectedCustomer.clientId, servedByName: selectedCustomer.servedByName || selectedCustomer.servedBy || null, paymentMethod, notes: notes.trim() });
+      const payment = paymentMethod === 'Unpaid' ? null : {
         orderId: null, // linked to the local order row below
         amount: total,
         method: paymentMethod,
         reference: paymentMethod === 'M-Pesa' ? normalizedMpesaCode : `${paymentMethod.toUpperCase()}-${Date.now()}`,
+        amountReceived: paymentMethod === 'Cash' ? total : undefined,
+        closeBooking: false,
         createdAt: new Date().toISOString(),
       };
       // Atomic: order + payment + outbox entries commit together.
@@ -208,12 +210,13 @@ export default function POSSalePage() {
             </p>
           )}
           <div className="sale-actions">
+            {completed.paymentMethod !== "Unpaid" && <>
             <button className="btn-primary" onClick={handleDownloadPDF}>
               <Download size={18} /> Download PDF receipt
             </button>
             <button className="btn-secondary" onClick={handlePrint}>
               <Printer size={18} /> Print receipt
-            </button>
+            </button></>}
             <button className="btn-secondary" onClick={() => navigate('/orders')}>
               <ReceiptIcon size={18} /> View orders
             </button>
@@ -372,10 +375,10 @@ export default function POSSalePage() {
           </div>
           <div className="sale-field">
             <label htmlFor="sale-payment">Payment method</label>
-            <select id="sale-payment" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
+            <select id="sale-payment" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} disabled={busy}>
               <option value="Cash">Cash{offline ? ' (works offline)' : ''}</option>
               <option value="M-Pesa">M-Pesa{offline ? ' (queued, confirmed when online)' : ''}</option>
-              <option value="Draft">Draft{offline ? ' (works offline)' : ''}</option>
+              <option value="Unpaid">Unpaid{offline ? ' (works offline)' : ''}</option>
             </select>
           </div>
           {paymentMethod === 'M-Pesa' && (
@@ -388,6 +391,7 @@ export default function POSSalePage() {
                 value={mpesaPhone}
                 onChange={(e) => setMpesaPhone(e.target.value)}
                 autoComplete="off"
+                disabled={busy}
               />
             </div>
           )}
@@ -405,6 +409,7 @@ export default function POSSalePage() {
                 minLength={6}
                 maxLength={20}
                 required
+                disabled={busy}
               />
               <small>Enter the code shown in the customer’s M-Pesa confirmation message.</small>
             </div>

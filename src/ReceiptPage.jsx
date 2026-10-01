@@ -144,7 +144,7 @@ export default function ReceiptPage() {
           <div className="receipt-payment">
             <small>Mode of payment</small>
             <p>
-              <b>{receipt.paymentMethod || 'Not selected'}</b>
+              <b>{receipt.paymentMethod === 'Draft' ? 'Unpaid' : (receipt.paymentMethod || 'Not selected')}</b>
               {receipt.paymentMethod === 'M-Pesa' && receipt.mpesaPhone ? (
                 <span>M-Pesa prompt number: {receipt.mpesaPhone}</span>
               ) : null}

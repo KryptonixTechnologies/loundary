@@ -120,7 +120,7 @@ function PricingPage() {
           <figcaption>Full pricing guide — tap or click to view clearly</figcaption>
         </figure>
         <p className="note">
-          Pay by Cash, M-Pesa, or Draft. A printed or PDF receipt is issued for every order.
+          Pay by Cash or M-Pesa, or save the booking as Unpaid. A printed or PDF receipt is issued for every order.
         </p>
       </section>
     </>

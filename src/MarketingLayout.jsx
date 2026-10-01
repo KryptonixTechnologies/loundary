@@ -42,7 +42,7 @@ const faqs = [
   { q: 'What laundry services do you offer?', a: 'We offer wash & fold, dry cleaning, ironing & steaming, and pickup & delivery services. See our Services page for details.' },
   { q: 'How does the pickup and delivery work?', a: 'You can schedule a pickup through our website or visit us directly at Chuna Mall. We collect your laundry, clean it, and deliver it back to your doorstep.' },
   { q: 'What are your business hours?', a: 'Monday – Saturday: 8:00 am – 9:00 pm. Sunday: 2:00 pm – 7:00 pm. Public holidays: 9:00 am – 7:00 pm.' },
-  { q: 'How do I pay?', a: 'We accept Cash, M-Pesa, and Draft payments. You can choose your preferred payment method when placing your booking.' },
+  { q: 'How do I pay?', a: 'We accept Cash and M-Pesa payments, and bookings can be saved as Unpaid. You can choose your preferred payment method when placing your booking.' },
   { q: 'Can I track my order?', a: 'Yes! Once you place an order, you receive a receipt with a unique number and token. You can check the status through your dashboard.' },
   { q: 'How do I contact customer support?', a: 'Call us at 011 944 4972, email opendoorslaundromat@gmail.com, or chat with us on WhatsApp.' },
 ];
@@ -100,9 +100,14 @@ export function MarketingLayout({ children }) {
             </a>
           ))}
           {user ? (
-            <a className="nav-cta" href="/dashboard" onClick={(e) => { e.preventDefault(); navigate('/dashboard'); setMobileMenuOpen(false); }}>
-              Dashboard
-            </a>
+            <>
+              <a className="nav-cta" href="/dashboard" onClick={(e) => { e.preventDefault(); navigate('/dashboard'); setMobileMenuOpen(false); }}>
+                Dashboard
+              </a>
+              <a className="nav-cta nav-cta-secondary" href="/login" onClick={(e) => { e.preventDefault(); navigate('/login'); setMobileMenuOpen(false); }}>
+                <LogIn size={16} /> Sign in
+              </a>
+            </>
           ) : (
             <>
               <a className="nav-cta" href="/login" onClick={(e) => { e.preventDefault(); navigate('/login'); setMobileMenuOpen(false); }}>

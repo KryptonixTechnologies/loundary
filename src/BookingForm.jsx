@@ -294,7 +294,7 @@ export default function BookingForm() {
           <select {...field('paymentMethod')} required aria-required="true">
             <option value="M-Pesa">M-Pesa</option>
             <option value="Cash">Cash</option>
-            <option value="Draft">Draft</option>
+            <option value="Unpaid">Unpaid</option>
           </select>
         </label>
         {form.paymentMethod === 'M-Pesa' && (

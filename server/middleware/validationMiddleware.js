@@ -47,8 +47,8 @@ export function validateBookingRequest(req, res, next) {
     }
 
     // Validate payment method
-    if (!['Cash', 'M-Pesa', 'Draft'].includes(paymentMethod)) {
-      return res.status(400).json({ error: 'Select Cash, M-Pesa, or Draft as the payment method.' });
+    if (!['Cash', 'M-Pesa', 'Unpaid'].includes(paymentMethod)) {
+      return res.status(400).json({ error: 'Select Cash, M-Pesa, or Unpaid as the payment method.' });
     }
 
     // Validate M-Pesa phone if payment method is M-Pesa

@@ -115,7 +115,7 @@ model BookingRequest {
   phone          String
   location       String
   service        String?
-  paymentMethod  String // "M-Pesa", "Cash", or "Draft"
+  paymentMethod  String // "M-Pesa", "Cash", or "Unpaid"
   mpesaPhone     String?
   notes          String?
   estimatedTotal Int

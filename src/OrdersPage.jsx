@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   ClipboardList,
   Eye,
+  Printer,
 } from 'lucide-react';
 import { useOfflineOrders } from './hooks/useOffline.js';
 import { upsertServerOrders } from './lib/db.js';
@@ -26,6 +27,10 @@ export default function OrdersPage() {
   const [filter, setFilter] = useState('all');
   const [notice, setNotice] = useState('');
   const [serverKnown, setServerKnown] = useState(true);
+  const [paymentOrder, setPaymentOrder] = useState(null);
+  const [collectionPaymentMethod, setCollectionPaymentMethod] = useState("Cash");
+  const [collectionMpesaCode, setCollectionMpesaCode] = useState("");
+  const [paymentBusy, setPaymentBusy] = useState(false);
 
   function handleLocalReceipt(order) {
     // Regenerate the receipt deterministically from the local row —
@@ -105,6 +110,70 @@ export default function OrdersPage() {
     }
   }
 
+  function handleStatusSelection(order, status) {
+    if (status === "ready_for_collection") {
+      setNotice("");
+      setPaymentOrder(order);
+      setCollectionPaymentMethod("Cash");
+      setCollectionMpesaCode("");
+      return;
+    }
+    handleStatusChange(order, status);
+  }
+
+  function handlePrintCollectionDetails() {
+    document.body.classList.add("print-collection-details");
+    const cleanup = () => document.body.classList.remove("print-collection-details");
+    window.addEventListener("afterprint", cleanup, { once: true });
+    window.print();
+  }
+
+  async function handleCollectionPayment(event) {
+    event.preventDefault();
+    if (!paymentOrder) return;
+    const bookingId = paymentOrder.externalId;
+    if (!navigator.onLine || !bookingId) {
+      setNotice("This booking must be online and synced before payment can be recorded.");
+      return;
+    }
+    const code = collectionMpesaCode.trim().toUpperCase();
+    if (collectionPaymentMethod === "M-Pesa" && !/^[A-Z0-9]{6,20}$/.test(code)) {
+      setNotice("Enter a valid M-Pesa transaction code.");
+      return;
+    }
+    setPaymentBusy(true);
+    setNotice("");
+    try {
+      const amount = Number(paymentOrder.totalAmount ?? paymentOrder.estimatedTotal) || 0;
+      const response = await fetch(`/api/pos/bookings/${bookingId}/payments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Idempotency-Key": `collection-${bookingId}-${Date.now()}` },
+        body: JSON.stringify({
+          amount,
+          method: collectionPaymentMethod,
+          amountReceived: collectionPaymentMethod === "Cash" ? amount : undefined,
+          mpesaReference: collectionPaymentMethod === "M-Pesa" ? code : undefined,
+        }),
+      });
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        throw new Error(result.error || "Payment could not be recorded.");
+      }
+      const dashboard = await fetch("/api/admin/dashboard");
+      if (dashboard.ok) {
+        const data = await dashboard.json();
+        await upsertServerOrders(data.requests || []);
+      }
+      await refresh();
+      setPaymentOrder((current) => current ? { ...current, paymentStatus: "paid", paymentMethod: collectionPaymentMethod, status: "ready_for_collection" } : current);
+      setNotice(`Payment recorded by ${collectionPaymentMethod}. The booking is completed.`);
+    } catch (error) {
+      setNotice(error.message || "Payment could not be recorded. Please try again.");
+    } finally {
+      setPaymentBusy(false);
+    }
+  }
+
   if (loading) return <div className="pos-page orders-page"><h2>Bookings</h2><p>Loading bookings…</p></div>;
 
   return (
@@ -146,41 +215,24 @@ export default function OrdersPage() {
           <table className="booking-table">
             <thead>
               <tr>
-                <th>Booking</th>
-                <th>Status</th>
                 <th>Customer</th>
                 <th>Services</th>
                 <th>Items</th>
                 <th>Amount</th>
                 <th>Payment</th>
-                <th>Attendant</th>
+                <th>Served by</th>
+                <th>Status</th>
                 <th>Action</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((order) => {
-                const attendant = order.createdBy?.name
-                  || order.createdBy?.username
-                  || order.createdBy?.email
-                  || order.attendant
+                const servedBy = order.customer?.servedByName
+                  || order.servedByName
+                  || order.servedBy
                   || "Not recorded";
                 return (
                   <tr key={order.id}>
-                    <td data-label="Booking" className="booking-number-cell">
-                      <strong>{order.receiptNumber || `Booking #${order.externalId || order.id}`}</strong>
-                      {order.syncStatus === "pending" && <small>Pending sync</small>}
-                    </td>
-                    <td data-label="Status" className="booking-status-cell">
-                      <select
-                        value={workflowStatus(order.status)}
-                        onChange={(e) => handleStatusChange(order, e.target.value)}
-                        aria-label={`Change status for order ${order.receiptNumber || order.id}`}
-                      >
-                        {STATUS_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>{option.label}</option>
-                        ))}
-                      </select>
-                    </td>
                     <td data-label="Customer"><strong>{order.customerName || order.name || "Walk-in"}</strong></td>
                     <td data-label="Services" className="booking-services-cell">{order.service || "No service details"}</td>
                     <td data-label="Items" className="booking-items-cell">{(order.items || []).length}</td>
@@ -191,9 +243,20 @@ export default function OrdersPage() {
                       <span className={`payment-state payment-state-${order.paymentStatus === 'paid' ? 'paid' : 'pending'}`}>
                         {order.paymentStatus === 'paid' ? 'Paid' : 'Pending'}
                       </span>
-                      <small>{order.paymentMethod || 'Not selected'}</small>
+                      <small>{order.paymentMethod === 'Draft' ? 'Unpaid' : (order.paymentMethod || 'Not selected')}</small>
                     </td>
-                    <td data-label="Attendant">{attendant}</td>
+                    <td data-label="Served by">{servedBy}</td>
+                    <td data-label="Status" className="booking-status-cell">
+                      <select
+                        value={workflowStatus(order.status)}
+                        onChange={(e) => handleStatusSelection(order, e.target.value)}
+                        aria-label={`Change status for order ${order.receiptNumber || order.id}`}
+                      >
+                        {STATUS_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                      </select>
+                    </td>
                     <td data-label="Action">
                       <div className="booking-actions">
                         {order.receiptToken ? (
@@ -214,6 +277,91 @@ export default function OrdersPage() {
               })}
             </tbody>
           </table>
+        </div>
+      )}
+      {paymentOrder && (
+        <div className="collection-payment-modal" role="dialog" aria-modal="true" aria-labelledby="collection-payment-title" onClick={() => !paymentBusy && setPaymentOrder(null)}>
+          <form onSubmit={handleCollectionPayment} onClick={(event) => event.stopPropagation()}>
+            <button type="button" className="collection-payment-close" onClick={() => setPaymentOrder(null)} disabled={paymentBusy} aria-label="Close payment dialog">×</button>
+            <section className="thermal-receipt" aria-label="Printable payment receipt">
+              <header className="thermal-receipt-header">
+                <strong>OPEN DOORS LAUNDROMAT</strong>
+                <span>Chuna Mall, Shop 10, Kitengela</span>
+                <span>PAYMENT RECEIPT</span>
+              </header>
+              <div className="thermal-receipt-meta">
+                <p><span>Receipt</span><strong>{paymentOrder.receiptNumber || `Booking #${paymentOrder.id}`}</strong></p>
+                <p><span>Date</span><strong>{new Date().toLocaleString()}</strong></p>
+                <p><span>Customer</span><strong>{paymentOrder.customer?.name || paymentOrder.customerName || paymentOrder.name || "Walk-in"}</strong></p>
+                <p><span>Contact</span><strong>{paymentOrder.customer?.phone || paymentOrder.customerPhone || paymentOrder.phone || "Not recorded"}</strong></p>
+                <p><span>Served by</span><strong>{paymentOrder.customer?.servedByName || paymentOrder.servedByName || paymentOrder.servedBy || "Not recorded"}</strong></p>
+              </div>
+              <div className="thermal-receipt-items">
+                <div className="thermal-receipt-item-heading"><span>ITEM</span><span>QTY</span><span>AMOUNT</span></div>
+                {(paymentOrder.items || []).length > 0 ? (paymentOrder.items || []).map((item, index) => {
+                  const quantity = Number(item.kg ?? item.quantity) || 1;
+                  const subtotal = Number(item.subtotal) || ((Number(item.unitPrice ?? item.price) || 0) * quantity);
+                  return <div className="thermal-receipt-item" key={`${item.service || item.name}-${index}`}><span>{item.service || item.name || "Laundry service"}</span><span>{quantity}</span><strong>KSh {subtotal.toLocaleString()}</strong></div>;
+                }) : <div className="thermal-receipt-item"><span>{paymentOrder.service || "Laundry service"}</span><span>{paymentOrder.quantity || 1}</span><strong>KSh {(Number(paymentOrder.totalAmount ?? paymentOrder.estimatedTotal) || 0).toLocaleString()}</strong></div>}
+              </div>
+              <div className="thermal-receipt-summary">
+                <p><span>Payment</span><strong>{paymentOrder.paymentMethod || collectionPaymentMethod}</strong></p>
+                {collectionMpesaCode && <p><span>Reference</span><strong>{collectionMpesaCode}</strong></p>}
+                <p className="thermal-receipt-total"><span>TOTAL PAID</span><strong>KSh {(Number(paymentOrder.totalAmount ?? paymentOrder.estimatedTotal) || 0).toLocaleString()}</strong></p>
+              </div>
+              <footer>
+                <strong>PAID</strong>
+                <span>Thank you for choosing us.</span>
+              </footer>
+            </section>
+            <p className="eyebrow">Ready for collection</p>
+            <h2 id="collection-payment-title">Customer and booking details</h2>
+            <p>Review the full details for <strong>{paymentOrder.receiptNumber || `Booking #${paymentOrder.id}`}</strong>.</p>
+            <div className="collection-customer-details">
+              <h3>Customer details</h3>
+              <dl>
+                <div><dt>Name</dt><dd>{paymentOrder.customer?.name || paymentOrder.customerName || paymentOrder.name || "Walk-in"}</dd></div>
+                <div><dt>Contact</dt><dd>{paymentOrder.customer?.phone || paymentOrder.customerPhone || paymentOrder.phone || "Not recorded"}</dd></div>
+                <div><dt>Email</dt><dd>{paymentOrder.customer?.email || paymentOrder.customerEmail || paymentOrder.email || "Not recorded"}</dd></div>
+                <div><dt>Gender</dt><dd>{paymentOrder.customer?.gender || paymentOrder.gender || "Not recorded"}</dd></div>
+                <div className="collection-customer-services"><dt>Address</dt><dd>{paymentOrder.customer?.address || paymentOrder.customer?.location || paymentOrder.address || paymentOrder.location || "Not recorded"}</dd></div>
+                <div><dt>Served by</dt><dd>{paymentOrder.customer?.servedByName || paymentOrder.servedByName || paymentOrder.servedBy || "Not recorded"}</dd></div>
+                <div className="collection-customer-services"><dt>Services</dt><dd>{paymentOrder.service || "No service details"}</dd></div>
+                <div><dt>Items</dt><dd>{(paymentOrder.items || []).length}</dd></div>
+                <div><dt>Payment status</dt><dd>{paymentOrder.paymentStatus === "paid" ? "Paid" : "Unpaid"}</dd></div>
+                <div><dt>Payment method</dt><dd>{paymentOrder.paymentStatus === "paid" ? (paymentOrder.paymentMethod || "Recorded") : collectionPaymentMethod}</dd></div>
+                <div><dt>Date</dt><dd>{paymentOrder.createdAt ? new Date(paymentOrder.createdAt).toLocaleString() : "Not recorded"}</dd></div>
+                <div className="collection-customer-services"><dt>Notes</dt><dd>{paymentOrder.notes || "No notes"}</dd></div>
+              </dl>
+            </div>
+            <div className="collection-payment-total">
+              <span>Amount due</span>
+              <strong>KSh {(Number(paymentOrder.totalAmount ?? paymentOrder.estimatedTotal) || 0).toLocaleString()}</strong>
+            </div>
+            {paymentOrder.paymentStatus !== "paid" && <>
+            <label className="sale-field">
+              <span>Payment method</span>
+              <select value={collectionPaymentMethod} onChange={(event) => setCollectionPaymentMethod(event.target.value)} disabled={paymentBusy}>
+                <option value="Cash">Cash</option>
+                <option value="M-Pesa">M-Pesa</option>
+              </select>
+            </label>
+            {collectionPaymentMethod === "M-Pesa" && (
+              <label className="sale-field">
+                <span>M-Pesa transaction code *</span>
+                <input value={collectionMpesaCode} onChange={(event) => setCollectionMpesaCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 20))} minLength={6} maxLength={20} required autoFocus />
+              </label>
+            )}</>}
+            <div className="collection-payment-actions">
+              {paymentOrder.paymentStatus === "paid" && <button type="button" className="btn-secondary collection-print-button" onClick={handlePrintCollectionDetails}><Printer size={16} /> Print receipt</button>}
+              {paymentOrder.paymentStatus === "paid" && <button type="button" className="btn-primary" onClick={() => navigate("/payments")}>View payments</button>}
+              <button type="button" className="btn-secondary" onClick={() => setPaymentOrder(null)} disabled={paymentBusy}>{paymentOrder.paymentStatus === "paid" ? "Close" : "Cancel"}</button>
+              {paymentOrder.paymentStatus !== "paid" && <button type="submit" className="btn-primary" disabled={paymentBusy}>{paymentBusy ? "Recording…" : "Record payment"}</button>}
+              {paymentOrder.paymentStatus === "paid" && workflowStatus(paymentOrder.status) !== "ready_for_collection" && (
+                <button type="button" className="btn-primary" onClick={async () => { await handleStatusChange(paymentOrder, "ready_for_collection"); setPaymentOrder(null); }}>Confirm ready for collection</button>
+              )}
+            </div>
+          </form>
         </div>
       )}
     </div>

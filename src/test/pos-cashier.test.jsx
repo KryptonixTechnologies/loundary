@@ -99,7 +99,7 @@ describe('cashier workflow offline (real component, real Dexie)', () => {
     expect(payment).toMatchObject({ method: 'M-Pesa', reference: 'HKSIIER' });
   });
 
-  it('saves Draft as a payment method without requiring M-Pesa fields', async () => {
+  it('saves Unpaid without creating a payment transaction', async () => {
     setOnline(false);
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('offline')));
     const user = userEvent.setup();
@@ -108,14 +108,14 @@ describe('cashier workflow offline (real component, real Dexie)', () => {
     await waitFor(() => expect(screen.getByText('Washing')).toBeInTheDocument());
     await user.click(within(screen.getByText('Washing').closest('article')).getByRole('button', { name: /^add$/i }));
     await user.selectOptions(screen.getByLabelText(/registered customer/i), screen.getByRole('option', { name: /server sam/i }));
-    await user.selectOptions(screen.getByLabelText(/payment method/i), 'Draft');
+    await user.selectOptions(screen.getByLabelText(/payment method/i), 'Unpaid');
     expect(screen.queryByLabelText(/m-pesa number/i)).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /save booking/i }));
 
     await waitFor(() => expect(screen.getByText(/booking saved/i)).toBeInTheDocument());
-    const payment = await db.payments.toCollection().first();
-    expect(payment.method).toBe('Draft');
-    expect(payment.reference).toMatch(/^DRAFT-/);
+    expect(await db.payments.count()).toBe(0);
+    const order = await db.orders.toCollection().first();
+    expect(order).toMatchObject({ paymentMethod: 'Unpaid', paymentStatus: 'pending' });
   });
 
   it('completes a full sale offline: services → cart → qty → customer → cash → order → receipt', async () => {

@@ -490,7 +490,7 @@ async function handlePaymentSync(entityId, action, payload, idempotencyKey = nul
         bookingId = orderSync?.externalId;
       }
       if (!bookingId) return { success: false, error: 'The related order must sync before its payment.' };
-      const payment = await operationsRepository.recordPayment(bookingId, { amount, method, mpesaReference: reference, amountReceived: payload.amountReceived }, userId, idempotencyKey);
+      const payment = await operationsRepository.recordPayment(bookingId, { amount, method, mpesaReference: reference, amountReceived: payload.amountReceived, closeBooking: payload.closeBooking }, userId, idempotencyKey);
       if (idempotencyKey) await prisma.syncOperation.upsert({ where: { idempotencyKey }, update: { externalId: payment.id }, create: { idempotencyKey, entityType: 'payment', clientEntityId: entityId, externalId: payment.id } });
       return { success: true, externalId: payment.id, idempotencyKey };
     }

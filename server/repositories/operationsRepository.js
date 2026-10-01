@@ -179,7 +179,7 @@ export const operationsRepository = {
   },
 
   async recordPayment(bookingId, data, userId, idempotencyKey = null) {
-    if (!['Cash', 'M-Pesa', 'Draft'].includes(data.method)) throw Object.assign(new Error('Payment method must be Cash, M-Pesa, or Draft.'), { status: 400 });
+    if (!['Cash', 'M-Pesa'].includes(data.method)) throw Object.assign(new Error('Payment method must be Cash or M-Pesa.'), { status: 400 });
     const amount = Number(data.amount);
     if (!Number.isInteger(amount) || amount <= 0) throw Object.assign(new Error('Payment amount must be a positive whole number.'), { status: 400 });
     const reference = data.method === 'M-Pesa' ? String(data.mpesaReference || '').trim().toUpperCase() : null;
@@ -194,6 +194,7 @@ export const operationsRepository = {
       if (booking.status === 'cancelled') throw Object.assign(new Error('Cancelled services cannot be paid.'), { status: 409 });
       if (booking.status === 'completed' || booking.closedAt) throw Object.assign(new Error('Service is already closed.'), { status: 409 });
       const alreadyPaid = booking.payments.reduce((sum, payment) => sum + payment.amount, 0);
+      if (alreadyPaid >= booking.estimatedTotal) throw Object.assign(new Error('This booking is already fully paid. The payment option is locked.'), { status: 409 });
       if (alreadyPaid + amount < booking.estimatedTotal) throw Object.assign(new Error('Full payment is required before service closure.'), { status: 409 });
       const amountReceived = data.method === 'Cash' ? Number(data.amountReceived ?? amount) : null;
       if (data.method === 'Cash' && amountReceived < amount) throw Object.assign(new Error('Amount received cannot be less than amount paid.'), { status: 400 });
@@ -202,11 +203,19 @@ export const operationsRepository = {
       });
       const receiptNumber = booking.receiptNumber;
       const receipt = await tx.receipt.create({ data: { receiptNumber, bookingId, paymentId: payment.id } });
-      await tx.bookingRequest.update({ where: { id: bookingId }, data: { paymentStatus: 'paid', paymentMethod: data.method, status: 'completed', closedAt: new Date(), closedById: userId } });
-      await tx.bookingStatusHistory.create({ data: { bookingId, status: 'completed', note: 'Payment recorded and service collected.', changedById: userId } });
-      await audit(tx, userId, 'payment.recorded', 'payment', payment.id, { bookingId, amount, method: data.method });
-      await audit(tx, userId, 'booking.closed', 'booking', bookingId);
-      return { ...payment, receipt };
+      const closeBooking = data.closeBooking !== false;
+      await tx.bookingRequest.update({
+        where: { id: bookingId },
+        data: closeBooking
+          ? { paymentStatus: 'paid', paymentMethod: data.method, status: 'completed', closedAt: new Date(), closedById: userId }
+          : { paymentStatus: 'paid', paymentMethod: data.method },
+      });
+      if (closeBooking) {
+        await tx.bookingStatusHistory.create({ data: { bookingId, status: 'completed', note: 'Payment recorded and service collected.', changedById: userId } });
+      }
+      await audit(tx, userId, 'payment.recorded', 'payment', payment.id, { bookingId, amount, method: data.method, closeBooking });
+      if (closeBooking) await audit(tx, userId, 'booking.closed', 'booking', bookingId);
+      return { ...payment, receipt, bookingClosed: closeBooking };
     });
   },
 
@@ -262,9 +271,8 @@ export const operationsRepository = {
     });
     const cash = payments.filter((x) => x.method === 'Cash');
     const mpesa = payments.filter((x) => x.method === 'M-Pesa');
-    const drafts = payments.filter((x) => x.method === 'Draft');
     return {
-      summary: { totalTransactions: payments.length, totalRevenue: payments.reduce((s, x) => s + x.amount, 0), totalCash: cash.reduce((s, x) => s + x.amount, 0), totalMpesa: mpesa.reduce((s, x) => s + x.amount, 0), totalDraft: drafts.reduce((s, x) => s + x.amount, 0) },
+      summary: { totalTransactions: payments.length, totalRevenue: payments.reduce((s, x) => s + x.amount, 0), totalCash: cash.reduce((s, x) => s + x.amount, 0), totalMpesa: mpesa.reduce((s, x) => s + x.amount, 0) },
       transactions: payments,
       services: [...services.values()],
       attendantActivity,

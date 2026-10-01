@@ -372,7 +372,9 @@ export async function upsertServerOrders(serverRequests) {
     const row = {
       clientId,
       externalId: req.id,
-      customerId: null,
+      customerId: req.customer?.id || req.customerId || null,
+      customer: req.customer || null,
+      servedByName: req.customer?.servedByName || null,
       customerName: req.name || 'Walk-in',
       service: req.service || '',
       totalAmount: Number(req.estimatedTotal) || 0,

@@ -50,13 +50,14 @@ describe('POS cart (offline, integer KES math)', () => {
 
   it('builds an offline order record from cart + customer + payment', () => {
     const cart = addToCart(addToCart([], WASH, 2), DRY, 1);
-    const order = buildOfflineOrder({ cart, customerName: 'Jane', paymentMethod: 'Cash', notes: '' });
+    const order = buildOfflineOrder({ cart, customerName: 'Jane', servedByName: 'Mary', paymentMethod: 'Cash', notes: '' });
     expect(order.totalAmount).toBe(1800);
     expect(order.paymentStatus).toBe('paid');
+    expect(order.servedByName).toBe('Mary');
     expect(order.items).toHaveLength(2);
     const mpesa = buildOfflineOrder({ cart, customerName: '', paymentMethod: 'M-Pesa' });
     expect(mpesa.customerName).toBe('Walk-in');
-    expect(mpesa.paymentStatus).toBe('pending');
+    expect(mpesa.paymentStatus).toBe('paid');
   });
 });
 
